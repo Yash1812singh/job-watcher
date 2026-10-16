@@ -1,0 +1,406 @@
+# Well-known companies to look up with: scripts/discover_companies.py --source names
+# Format: "Company name | website". Only companies whose job board is found get added.
+Abnormal Security | abnormalsecurity.com
+Addepar | addepar.com
+Airwallex | airwallex.com
+Alation | alation.com
+Algolia | algolia.com
+AlphaSense | alpha-sense.com
+Apollo.io | apollo.io
+AppLovin | applovin.com
+Applied Intuition | appliedintuition.com
+Arcadia | arcadia.com
+Arctic Wolf | arcticwolf.com
+Attentive | attentive.com
+Augury | augury.com
+Aurora Solar | aurorasolar.com
+Automattic | automattic.com
+Axios | axios.com
+Bilt Rewards | biltrewards.com
+BitGo | bitgo.com
+Bolt | bolt.com
+Boomi | boomi.com
+Braze | braze.com
+Bumble | bumble.com
+Canonical | canonical.com
+Celonis | celonis.com
+Chainalysis | chainalysis.com
+ClassPass | classpass.com
+Clever | clever.com
+Clio | clio.com
+Close | close.com
+CoreWeave | coreweave.com
+Course Hero | coursehero.com
+Crusoe | crusoe.ai
+Culture Amp | cultureamp.com
+Cyera | cyera.io
+Dashlane | dashlane.com
+Dataiku | dataiku.com
+DataRobot | datarobot.com
+Descript | descript.com
+Dialpad | dialpad.com
+Doximity | doximity.com
+Dremio | dremio.com
+Druva | druva.com
+Dune | dune.com
+Earnin | earnin.com
+EasyPost | easypost.com
+Eightfold AI | eightfold.ai
+Elastic Path | elasticpath.com
+Envoy | envoy.com
+Epic Games | epicgames.com
+Eventbrite | eventbrite.com
+Fanatics | fanatics.com
+Fastly | fastly.com
+Faire | faire.com
+Fivetran | fivetran.com
+Flock Safety | flocksafety.com
+Forter | forter.com
+Freshpaint | freshpaint.io
+Front | front.com
+FullStory | fullstory.com
+Gemini | gemini.com
+Genesys | genesys.com
+GoCardless | gocardless.com
+GoodRx | goodrx.com
+Gorgias | gorgias.com
+Highspot | highspot.com
+Hinge Health | hingehealth.com
+Hopper | hopper.com
+HubSpot | hubspot.com
+Hightouch | hightouch.com
+Icertis | icertis.com
+Illumio | illumio.com
+Imply | imply.io
+Iterable | iterable.com
+Jamf | jamf.com
+Kaseya | kaseya.com
+Khan Academy | khanacademy.org
+Kong | konghq.com
+Kraken | kraken.com
+Lacework | lacework.com
+Lambda | lambdalabs.com
+Lime | li.me
+LinkedIn | linkedin.com
+Lucid Software | lucid.co
+Lyra Health | lyrahealth.com
+Magic Leap | magicleap.com
+Marqeta | marqeta.com
+Matillion | matillion.com
+Medium | medium.com
+Melio | meliopayments.com
+Metabase | metabase.com
+Mercari | mercari.com
+Motive | gomotive.com
+Navan | navan.com
+Netskope | netskope.com
+Niantic | nianticlabs.com
+Nextdoor | nextdoor.com
+Noom | noom.com
+Nordsec | nordsec.com
+Notable | notablehealth.com
+Ocrolus | ocrolus.com
+Omada Health | omadahealth.com
+OneTrust | onetrust.com
+Optimizely | optimizely.com
+Orca Security | orca.security
+Oscar Health | hioscar.com
+Pagaya | pagaya.com
+Palo Alto Networks | paloaltonetworks.com
+Patreon | patreon.com
+Personio | personio.com
+Pipedrive | pipedrive.com
+Podium | podium.com
+Procore | procore.com
+Productboard | productboard.com
+Pulumi | pulumi.com
+Qualtrics | qualtrics.com
+Quora | quora.com
+Rakuten | rakuten.com
+Recharge | rechargepayments.com
+Remote | remote.com
+Ripple | ripple.com
+Rokt | rokt.com
+Salt Security | salt.security
+Sanity | sanity.io
+Semrush | semrush.com
+SentinelOne | sentinelone.com
+ServiceTitan | servicetitan.com
+Shopify | shopify.com
+Sigma Computing | sigmacomputing.com
+SimpliSafe | simplisafe.com
+Skydio | skydio.com
+Smartsheet | smartsheet.com
+Socure | socure.com
+Sourcegraph | sourcegraph.com
+Spring Health | springhealth.com
+Sprout Social | sproutsocial.com
+Starburst | starburst.io
+Stash | stash.com
+StockX | stockx.com
+Sumo Logic | sumologic.com
+SurveyMonkey | surveymonkey.com
+Sweetgreen | sweetgreen.com
+Tala | tala.co
+Tanium | tanium.com
+Thumbtack | thumbtack.com
+Tines | tines.com
+Tipalti | tipalti.com
+Trade Republic | traderepublic.com
+Trellix | trellix.com
+Trustpilot | trustpilot.com
+Turo | turo.com
+Twilio Segment | segment.com
+Typeform | typeform.com
+Udacity | udacity.com
+Unity | unity.com
+Upstart | upstart.com
+Upwork | upwork.com
+Vimeo | vimeo.com
+Vise | vise.com
+Wayfair | wayfair.com
+Whoop | whoop.com
+Wikimedia Foundation | wikimediafoundation.org
+Wix | wix.com
+Yext | yext.com
+Yugabyte | yugabyte.com
+Zendesk | zendesk.com
+Zip | ziphq.com
+Zocdoc | zocdoc.com
+Zuora | zuora.com
+# India
+Acko | acko.com
+Airtel | airtel.in
+Apna | apna.co
+BrowserStack | browserstack.com
+CarDekho | cardekho.com
+Classplus | classplus.co
+Cleartrip | cleartrip.com
+Coinswitch | coinswitch.co
+CoinDCX | coindcx.com
+Dunzo | dunzo.com
+Eruditus | eruditus.com
+Fampay | fampay.in
+FirstCry | firstcry.com
+Games24x7 | games24x7.com
+GreyOrange | greyorange.com
+HealthifyMe | healthifyme.com
+Hevo Data | hevodata.com
+Instamojo | instamojo.com
+Jar | myjar.app
+Jupiter | jupiter.money
+Kissflow | kissflow.com
+Livspace | livspace.com
+Mamaearth | mamaearth.in
+MPL | mpl.live
+MakeMyTrip | makemytrip.com
+Myntra | myntra.com
+Ninjacart | ninjacart.in
+Ola Electric | olaelectric.com
+Open Financial | open.money
+Park+ | parkplus.io
+PayU | payu.in
+Pine Labs | pinelabs.com
+Pocket FM | pocketfm.com
+Porter | porter.in
+Practo | practo.com
+Rebel Foods | rebelfoods.com
+Recko | recko.io
+Shiprocket | shiprocket.in
+Simpl | getsimpl.com
+SpotDraft | spotdraft.com
+Springworks | springworks.in
+Testbook | testbook.com
+ThoughtSpot | thoughtspot.com
+Toplyne | toplyne.io
+Turing | turing.com
+Uni Cards | uni.cards
+Urban Company | urbancompany.com
+Vahan | vahan.co
+Wingify | wingify.com
+Xpressbees | xpressbees.com
+Yubi | go-yubi.com
+Zetwerk | zetwerk.com
+Zolve | zolve.com
+# Batch 2
+Abridge | abridge.com
+Aiven | aiven.io
+Airship | airship.com
+Algolia | algolia.com
+Anaplan | anaplan.com
+Appian | appian.com
+Applied Materials | appliedmaterials.com
+Aptos | aptoslabs.com
+Arista Networks | arista.com
+Armis | armis.com
+Asana | asana.com
+Astronomer | astronomer.io
+Attio | attio.com
+Avalara | avalara.com
+Backblaze | backblaze.com
+Betterment | betterment.com
+Bill.com | bill.com
+Bitwarden | bitwarden.com
+BlackLine | blackline.com
+Block | block.xyz
+Blue Origin | blueorigin.com
+Bolt Financial | bolt.com
+Boston Dynamics | bostondynamics.com
+Box | box.com
+Brightwheel | mybrightwheel.com
+Buildkite | buildkite.com
+Built Technologies | getbuilt.com
+Cameo | cameo.com
+Capsule | capsule.com
+Census | getcensus.com
+Cerebral | cerebral.com
+Chronosphere | chronosphere.io
+Circle | circle.com
+CircleCI | circleci.com
+Cityblock Health | cityblock.com
+Clay | clay.com
+Coda | coda.io
+Collibra | collibra.com
+Contentful | contentful.com
+Contentsquare | contentsquare.com
+Convoy | convoy.com
+Coupa | coupa.com
+Crossbeam | crossbeam.com
+Cribl | cribl.io
+Dapper Labs | dapperlabs.com
+Databento | databento.com
+Datavant | datavant.com
+Degreed | degreed.com
+Delinea | delinea.com
+Dagster Labs | dagster.io
+Domo | domo.com
+DigitalOcean | digitalocean.com
+DriveWealth | drivewealth.com
+Duck Duck Go | duckduckgo.com
+Ecosia | ecosia.org
+Electric | electric.ai
+Embark Trucks | embarktrucks.com
+Enable | enable.com
+Expensify | expensify.com
+Fabric | fabric.inc
+Fair Square | fairsquaremedicare.com
+Fanduel | fanduel.com
+Firebolt | firebolt.io
+Fireblocks | fireblocks.com
+Flatiron Health | flatiron.com
+Formlabs | formlabs.com
+Fountain | fountain.com
+Gecko Robotics | geckorobotics.com
+Ginkgo Bioworks | ginkgobioworks.com
+GitBook | gitbook.com
+Gong | gong.io
+Grafana | grafana.com
+Gusto | gusto.com
+HackerOne | hackerone.com
+Headway | headway.co
+Heap | heap.io
+Hex | hex.tech
+Honeycomb | honeycomb.io
+Hugging Face | huggingface.co
+Instabase | instabase.com
+Ironclad | ironcladapp.com
+Jobber | getjobber.com
+Komodo Health | komodohealth.com
+Lattice | lattice.com
+Lemonade | lemonade.com
+Lightmatter | lightmatter.co
+Lob | lob.com
+Lucidworks | lucidworks.com
+Mapbox | mapbox.com
+Memora Health | memorahealth.com
+Mux | mux.com
+Nansen | nansen.ai
+Neuralink | neuralink.com
+Nium | nium.com
+Northvolt | northvolt.com
+Nylas | nylas.com
+Obsidian Security | obsidiansecurity.com
+Ontra | ontra.ai
+OpenSea | opensea.io
+Outschool | outschool.com
+Paxos | paxos.com
+Persona | withpersona.com
+Pilot | pilot.com
+Plaid | plaid.com
+Pendo | pendo.io
+Philo | philo.com
+Pinecone | pinecone.io
+Poshmark | poshmark.com
+Prefect | prefect.io
+Quantexa | quantexa.com
+Quizlet | quizlet.com
+Radiant Security | radiantsecurity.ai
+Reddit | reddit.com
+Relativity | relativity.com
+Rivian | rivian.com
+Roofstock | roofstock.com
+Rubrik | rubrik.com
+Runway Financial | runway.com
+Seatgeek | seatgeek.com
+Secureframe | secureframe.com
+Seismic | seismic.com
+Skillz | skillz.com
+Sonder | sonder.com
+Spotnana | spotnana.com
+Stytch | stytch.com
+Superhuman | superhuman.com
+Swile | swile.co
+Synthesia | synthesia.io
+Tecton | tecton.ai
+Teleport | goteleport.com
+Thoughtworks | thoughtworks.com
+Truework | truework.com
+Twist Bioscience | twistbioscience.com
+Unqork | unqork.com
+Upgrade | upgrade.com
+Vanta | vanta.com
+Varo | varomoney.com
+Veeva | veeva.com
+Vercel | vercel.com
+Wealthfront | wealthfront.com
+Weaviate | weaviate.io
+Webflow | webflow.com
+Wolt | wolt.com
+Workato | workato.com
+Writer | writer.com
+Zeplin | zeplin.io
+Zilliz | zilliz.com
+Zipline | flyzipline.com
+# India batch 2
+Agnikul | agnikul.in
+BharatPe | bharatpe.com
+Byju's | byjus.com
+Captain Fresh | captainfresh.in
+Chalo | chalo.com
+CloudSEK | cloudsek.com
+Darwinbox | darwinbox.com
+DealShare | dealshare.in
+Dukaan | mydukaan.io
+Eloelo | eloelo.in
+Fyle | fylehq.com
+Goodera | goodera.com
+InVideo | invideo.io
+Jumbotail | jumbotail.com
+Kuku FM | kukufm.com
+Leap Scholar | leapscholar.com
+M2P Fintech | m2pfintech.com
+Mobile Premier League | mpl.live
+Nobroker | nobroker.in
+OfBusiness | ofbusiness.com
+Pixxel | pixxel.space
+Plum | plumhq.com
+Rupeek | rupeek.com
+Salesken | salesken.ai
+Sharechat | sharechat.com
+Skyroot Aerospace | skyroot.in
+Snapmint | snapmint.com
+Sprinto | sprinto.com
+Stashfin | stashfin.com
+SuperOps | superops.com
+Uolo | uolo.com
+Zoomcar | zoomcar.com

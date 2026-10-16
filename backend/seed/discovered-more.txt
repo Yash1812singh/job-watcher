@@ -1,0 +1,243 @@
+# Found 2026-10-16 13:43 from the Y Combinator company dataset; 242 of 2847 companies have a job board with jobs.
+ACLU | https://boards.greenhouse.io/aclu
+Akido Labs | https://boards.greenhouse.io/akidolabs
+Alchemy | https://jobs.ashbyhq.com/alchemy
+Alloy | https://boards.greenhouse.io/alloy
+Ambition | https://jobs.ashbyhq.com/ambition
+Ansa Biotechnologies | https://boards.greenhouse.io/ansabiotechnologies
+Aqua Voice | https://jobs.ashbyhq.com/aqua-voice
+Archil | https://jobs.ashbyhq.com/archil
+Argon AI, Inc. | https://jobs.ashbyhq.com/argon-ai
+Aspora | https://jobs.ashbyhq.com/aspora
+Atrato | https://jobs.ashbyhq.com/atrato
+Atum Works | https://jobs.ashbyhq.com/atumworks
+Axial | https://boards.greenhouse.io/axial
+Axiom.ai | https://jobs.ashbyhq.com/axiom
+Bankjoy | https://jobs.ashbyhq.com/bankjoy
+Baubap | https://boards.greenhouse.io/baubap
+Bernard | https://jobs.ashbyhq.com/bernard
+Bird | https://boards.greenhouse.io/bird
+Birdie | https://jobs.ashbyhq.com/birdie
+Blue | https://jobs.lever.co/blue
+Blueberry Pediatrics | https://jobs.ashbyhq.com/blueberrypediatrics
+Bluedot | https://jobs.ashbyhq.com/bluedot
+Boom | https://jobs.ashbyhq.com/boom
+Boostly | https://jobs.ashbyhq.com/boostly
+Butter | https://jobs.ashbyhq.com/butter
+Camp | https://boards.greenhouse.io/camp
+CareMessage | https://jobs.ashbyhq.com/caremessage
+Carrot Fertility | https://boards.greenhouse.io/carrotfertility
+Cedar | https://jobs.ashbyhq.com/cedar
+Chicory | https://boards.greenhouse.io/chicory
+Chronicle Labs | https://jobs.ashbyhq.com/chronicle-labs
+Clear | https://boards.greenhouse.io/clear
+Clear | https://boards.greenhouse.io/clear
+Close | https://jobs.ashbyhq.com/close
+Clueso | https://jobs.ashbyhq.com/clueso
+CoLab | https://boards.greenhouse.io/colabsoftware
+CommodityAI | https://jobs.ashbyhq.com/commodityai
+Constellation Space | https://jobs.ashbyhq.com/constellationspace
+Context.dev | https://jobs.ashbyhq.com/context
+Copia | https://jobs.lever.co/copia
+Cortex | https://boards.greenhouse.io/cortex
+Corvus Robotics | https://jobs.ashbyhq.com/corvus-robotics
+Cosmic Robotics | https://jobs.ashbyhq.com/cosmic-robotics
+Craze | https://jobs.ashbyhq.com/craze
+Culture Biosciences | https://boards.greenhouse.io/culturebiosciences
+d_model | https://jobs.ashbyhq.com/dmodel
+Daybreak Health | https://boards.greenhouse.io/daybreakhealth
+Depot | https://jobs.ashbyhq.com/depot
+Dex | https://jobs.ashbyhq.com/dex
+Distro | https://jobs.lever.co/distro
+Double – Coding Copilot | https://jobs.ashbyhq.com/double
+Doublezero | https://jobs.ashbyhq.com/doublezero
+Elite | https://boards.greenhouse.io/elite
+Emi Labs | https://jobs.lever.co/emilabs
+Empirical Health | https://jobs.ashbyhq.com/empirical
+Enveritas | https://boards.greenhouse.io/enveritas
+Exa | https://jobs.ashbyhq.com/exa
+Extend | https://jobs.ashbyhq.com/extend
+Farel | https://jobs.ashbyhq.com/farel
+Fazeshift | https://jobs.ashbyhq.com/fazeshift
+Feanix Biotechnologies | https://boards.greenhouse.io/feanixbiotechnologies
+Finary.com | https://jobs.ashbyhq.com/finary
+Fintual | https://jobs.lever.co/fintual
+Fleetzero | https://jobs.lever.co/fleetzero
+Flip | https://jobs.ashbyhq.com/flip
+Float | https://jobs.ashbyhq.com/float
+Flux | https://jobs.ashbyhq.com/flux
+Flux | https://jobs.ashbyhq.com/flux
+Focal Systems | https://boards.greenhouse.io/focalsystems
+Forerunner | https://jobs.ashbyhq.com/forerunner
+Foresight | https://jobs.ashbyhq.com/foresight
+Formal | https://jobs.ashbyhq.com/formal
+Forward | https://boards.greenhouse.io/forward
+Foundation | https://jobs.ashbyhq.com/foundation
+Fulcrum | https://jobs.ashbyhq.com/fulcrum
+Fuse | https://jobs.ashbyhq.com/fuse
+General Legal | https://boards.greenhouse.io/general
+Glide | https://jobs.ashbyhq.com/glide
+GoCardless | https://boards.greenhouse.io/gocardless
+Golf | https://boards.greenhouse.io/golf
+Greptile | https://jobs.ashbyhq.com/greptile
+Grey | https://boards.greenhouse.io/grey
+GUILD | https://jobs.ashbyhq.com/guild
+Gumloop | https://jobs.ashbyhq.com/gumloop
+H1 | https://jobs.lever.co/h1
+H3X Technologies | https://jobs.ashbyhq.com/h3x-technologies
+Harbor | https://jobs.ashbyhq.com/harbor
+Hazel | https://jobs.ashbyhq.com/hazel
+HealthSherpa | https://jobs.ashbyhq.com/healthsherpa
+Heart Aerospace | https://boards.greenhouse.io/heartaerospace
+Hexa | https://jobs.ashbyhq.com/hexa
+Hightouch | https://jobs.ashbyhq.com/hightouch
+hillclimb | https://jobs.ashbyhq.com/hillclimb
+Hive Health | https://jobs.ashbyhq.com/hivehealth
+Honeydew | https://jobs.ashbyhq.com/honeydew
+Hopper | https://jobs.ashbyhq.com/hopper
+Hubble Network | https://boards.greenhouse.io/hubblenetwork
+Hudu | https://jobs.ashbyhq.com/hudu
+Humanly | https://jobs.ashbyhq.com/humanly
+Hypercore | https://jobs.ashbyhq.com/hypercore
+Infera | https://jobs.ashbyhq.com/infera
+Inversion Space | https://boards.greenhouse.io/inversionspace
+ion design | https://jobs.lever.co/ion
+Jeeves | https://jobs.lever.co/tryjeeves
+Junction Bioscience | https://jobs.ashbyhq.com/junction
+Kernal Biologics | https://boards.greenhouse.io/kernalbio
+KERNEL | https://jobs.ashbyhq.com/kernel
+Kinter | https://jobs.lever.co/kinter
+Kite | https://boards.greenhouse.io/kite
+Ladder | https://jobs.ashbyhq.com/ladder
+LAIKA | https://boards.greenhouse.io/laika
+LanceDB | https://jobs.ashbyhq.com/lancedb
+Lark | https://jobs.ashbyhq.com/lark
+Lark | https://jobs.ashbyhq.com/lark
+LemFi | https://jobs.ashbyhq.com/lemfi
+Lingo.dev | https://jobs.ashbyhq.com/lingodotdev
+Lio (formerly askLio) | https://jobs.ashbyhq.com/lio
+Litmus | https://jobs.ashbyhq.com/litmus
+Long Term Stock Exchange | https://boards.greenhouse.io/ltse
+Loula | https://jobs.ashbyhq.com/loula
+Lucid Bots | https://boards.greenhouse.io/lucidbots
+Luminate | https://boards.greenhouse.io/luminate
+Madrone | https://jobs.ashbyhq.com/madrone
+Malga | https://jobs.ashbyhq.com/malga
+Mantis | https://boards.greenhouse.io/mantis
+MarqVision | https://boards.greenhouse.io/marqvision
+Mastra | https://jobs.ashbyhq.com/mastra
+Mattermost | https://boards.greenhouse.io/mattermost
+Maven | https://jobs.ashbyhq.com/maven
+MaverickX | https://jobs.lever.co/maverickx
+MBX | https://boards.greenhouse.io/us
+Meadow | https://jobs.ashbyhq.com/meadow
+Medium Biosciences | https://boards.greenhouse.io/medium
+Method | https://jobs.ashbyhq.com/method
+Minerva | https://jobs.ashbyhq.com/minerva
+Modus | https://jobs.ashbyhq.com/modus
+Moonshot | https://jobs.ashbyhq.com/moonshot
+Mundo AI | https://jobs.ashbyhq.com/mundo-ai
+Mux | https://jobs.ashbyhq.com/mux
+Nabla Bio | https://jobs.ashbyhq.com/nabla
+Nex | https://boards.greenhouse.io/nex
+Nexus | https://boards.greenhouse.io/nexus
+Novel | https://jobs.ashbyhq.com/novel
+Ollama | https://jobs.ashbyhq.com/ollama
+Onebrief | https://jobs.ashbyhq.com/onebrief
+OpenProse | https://jobs.ashbyhq.com/prose
+Orca | https://jobs.ashbyhq.com/orca
+Orchestra | https://boards.greenhouse.io/orchestra
+OutRival, Inc. | https://jobs.ashbyhq.com/outrival
+Outschool | https://jobs.ashbyhq.com/outschool
+Overwatch | https://boards.greenhouse.io/overwatch
+Papa | https://boards.greenhouse.io/papa
+Parallel | https://jobs.ashbyhq.com/parallel
+Permutive | https://jobs.ashbyhq.com/permutive
+Pharos | https://jobs.ashbyhq.com/pharos
+Phase Biolabs | https://jobs.ashbyhq.com/phasebiolabs
+Photoroom | https://jobs.ashbyhq.com/photoroom
+PickTrace | https://jobs.lever.co/picktrace
+Pipekit | https://jobs.ashbyhq.com/pipekit
+Plane | https://jobs.ashbyhq.com/plane
+Plexus | https://jobs.lever.co/plexus
+Plume | https://boards.greenhouse.io/plume
+Polar | https://jobs.ashbyhq.com/polar
+PowerUs | https://jobs.ashbyhq.com/powerus
+Praxis | https://boards.greenhouse.io/praxis
+Preload | https://boards.greenhouse.io/preload
+Prism | https://jobs.ashbyhq.com/prism
+Prism | https://jobs.ashbyhq.com/prism
+Pronto | https://boards.greenhouse.io/pronto
+Pyka | https://jobs.lever.co/pyka
+Quippy | https://jobs.ashbyhq.com/quippy
+ReadMe | https://jobs.ashbyhq.com/readme
+refine | https://jobs.ashbyhq.com/refine
+REGENT | https://jobs.ashbyhq.com/regent
+Remora | https://boards.greenhouse.io/remoracarbon
+Resend | https://jobs.ashbyhq.com/resend
+REZI | https://jobs.ashbyhq.com/rezi
+River | https://jobs.ashbyhq.com/river
+Roofr | https://boards.greenhouse.io/roofr
+Rosebud AI | https://boards.greenhouse.io/rosebud
+Sage Care | https://jobs.ashbyhq.com/sagecare
+Salt Security | https://boards.greenhouse.io/saltsecurity
+Sapien | https://jobs.ashbyhq.com/sapien
+Sazabi | https://jobs.ashbyhq.com/sazabi
+Scape | https://jobs.ashbyhq.com/scape
+Seer | https://boards.greenhouse.io/seer
+Sensei | https://boards.greenhouse.io/sensei
+Shiru | https://jobs.lever.co/shiru
+Sila | https://jobs.lever.co/sila
+Simetrik | https://jobs.ashbyhq.com/simetrik
+Simplify | https://jobs.ashbyhq.com/simplify
+SingleStore | https://boards.greenhouse.io/singlestore
+SIRUM | https://boards.greenhouse.io/sirum
+Sixfold Bioscience | https://boards.greenhouse.io/sixfold
+SkydropX | https://jobs.ashbyhq.com/skydropx
+SmartAsset | https://boards.greenhouse.io/smartasset
+Snackpass | https://jobs.ashbyhq.com/snackpass
+Snapdocs | https://jobs.ashbyhq.com/snapdocs
+Sorcerer | https://jobs.ashbyhq.com/sorcerer
+Spherecast | https://jobs.ashbyhq.com/spherecast
+Sphinx | https://jobs.ashbyhq.com/sphinx
+Spotlight Realty | https://jobs.ashbyhq.com/spotlight
+Squire Technologies | https://jobs.ashbyhq.com/getsquire
+Stacker | https://jobs.ashbyhq.com/stacker
+Stage | https://boards.greenhouse.io/stage
+STARK BANK | https://jobs.lever.co/starkbank
+Submittable | https://boards.greenhouse.io/submittable
+Substack | https://jobs.ashbyhq.com/substack
+Sunset | https://jobs.ashbyhq.com/sunset
+Super | https://boards.greenhouse.io/super
+Superside | https://jobs.lever.co/superside
+Switchboard | https://jobs.ashbyhq.com/switchboard
+Symphony | https://boards.greenhouse.io/symphony
+Synapticure | https://jobs.lever.co/synapticure
+Tajir | https://jobs.ashbyhq.com/tajir
+Teleport | https://jobs.ashbyhq.com/goteleport
+Tendo | https://jobs.lever.co/tendo
+Tenor | https://jobs.ashbyhq.com/tenor
+Tesseract | https://boards.greenhouse.io/tesseract
+TesterArmy | https://boards.greenhouse.io/tester
+The Token Company | https://jobs.ashbyhq.com/the-token-company
+Thndr | https://jobs.ashbyhq.com/thndr
+Tilt | https://jobs.ashbyhq.com/tilt
+Toku | https://jobs.ashbyhq.com/toku
+Tremendous | https://jobs.ashbyhq.com/tremendous
+Trigger.dev | https://jobs.ashbyhq.com/triggerdev
+True Link | https://jobs.ashbyhq.com/truelinkfinancial
+Understood Care | https://boards.greenhouse.io/understoodcare
+Unify | https://jobs.ashbyhq.com/unify
+Universe | https://jobs.ashbyhq.com/universe
+Upflow | https://jobs.ashbyhq.com/upflow
+UserGems | https://boards.greenhouse.io/usergems
+Veriff | https://boards.greenhouse.io/veriff
+Verifiable | https://jobs.lever.co/verifiable
+Vibe | https://jobs.ashbyhq.com/vibe
+Wafer | https://jobs.ashbyhq.com/wafer
+Wallbit | https://jobs.ashbyhq.com/wallbit
+Warp | https://jobs.ashbyhq.com/warp
+Whitespace | https://boards.greenhouse.io/whitespace
+Yotta | https://jobs.ashbyhq.com/yotta
+Yuma AI | https://boards.greenhouse.io/yuma
+Zerocater | https://boards.greenhouse.io/zerocater

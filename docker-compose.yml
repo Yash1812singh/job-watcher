@@ -1,0 +1,11 @@
+services:
+  jobwatcher:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "80:8090"
+    environment:
+      JOB_WATCHER_PASSWORD: ${JOB_WATCHER_PASSWORD:?set JOB_WATCHER_PASSWORD in .env}
+      JOB_WATCHER_MAX_BROWSERS: ${JOB_WATCHER_MAX_BROWSERS:-2}
+    volumes:
+      - ./data:/data

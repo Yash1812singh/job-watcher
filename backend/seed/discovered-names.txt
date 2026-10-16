@@ -1,0 +1,84 @@
+# Found 2026-10-16 13:49 from the Y Combinator company dataset; 83 of 191 companies have a job board with jobs.
+Abnormal Security | https://boards.greenhouse.io/abnormalsecurity
+Airwallex | https://jobs.ashbyhq.com/airwallex
+AlphaSense | https://boards.greenhouse.io/alphasense
+AppLovin | https://boards.greenhouse.io/applovin
+Arcadia | https://jobs.lever.co/arcadia
+Attentive | https://boards.greenhouse.io/attentive
+Augury | https://boards.greenhouse.io/augury
+Aurora Solar | https://jobs.ashbyhq.com/aurorasolar
+BitGo | https://boards.greenhouse.io/bitgo
+Braze | https://boards.greenhouse.io/braze
+Celonis | https://boards.greenhouse.io/celonis
+ClassPass | https://boards.greenhouse.io/classpass
+Clever | https://boards.greenhouse.io/clever
+CoreWeave | https://boards.greenhouse.io/coreweave
+Crusoe | https://jobs.ashbyhq.com/crusoe
+Culture Amp | https://boards.greenhouse.io/cultureamp
+Dataiku | https://boards.greenhouse.io/dataiku
+Descript | https://boards.greenhouse.io/descript
+Dialpad | https://boards.greenhouse.io/dialpad
+Dremio | https://boards.greenhouse.io/dremio
+Dune | https://jobs.ashbyhq.com/dune
+Earnin | https://boards.greenhouse.io/earnin
+Forter | https://boards.greenhouse.io/forter
+FullStory | https://jobs.ashbyhq.com/fullstory
+Gemini | https://boards.greenhouse.io/gemini
+Gorgias | https://jobs.ashbyhq.com/gorgias
+Hevo Data | https://jobs.lever.co/hevodata
+Hinge Health | https://jobs.ashbyhq.com/hinge-health
+Illumio | https://jobs.ashbyhq.com/illumio
+Imply | https://boards.greenhouse.io/imply
+Iterable | https://jobs.ashbyhq.com/iterable
+Jamf | https://boards.greenhouse.io/jamf
+Kaseya | https://boards.greenhouse.io/kaseya
+Kong | https://jobs.ashbyhq.com/kong
+Lambda | https://jobs.ashbyhq.com/lambda
+LinkedIn | https://jobs.lever.co/linkedin
+Lucid Software | https://boards.greenhouse.io/lucidsoftware
+Lyra Health | https://jobs.lever.co/lyrahealth
+Matillion | https://jobs.lever.co/matillion
+Melio | https://boards.greenhouse.io/melio
+Metabase | https://jobs.lever.co/metabase
+Motive | https://boards.greenhouse.io/motive
+Netskope | https://boards.greenhouse.io/netskope
+Nextdoor | https://boards.greenhouse.io/nextdoor
+Notable | https://jobs.ashbyhq.com/notable
+Omada Health | https://boards.greenhouse.io/omadahealth
+OneTrust | https://boards.greenhouse.io/onetrust
+Orca Security | https://boards.greenhouse.io/orcasecurity
+Pagaya | https://boards.greenhouse.io/pagaya
+Patreon | https://jobs.ashbyhq.com/patreon
+Pipedrive | https://jobs.lever.co/pipedrive
+Pocket FM | https://jobs.lever.co/pocketfm
+Qualtrics | https://boards.greenhouse.io/qualtrics
+Recharge | https://jobs.ashbyhq.com/recharge
+Remote | https://boards.greenhouse.io/remote
+Ripple | https://boards.greenhouse.io/ripple
+Sanity | https://jobs.ashbyhq.com/sanity
+Sigma Computing | https://boards.greenhouse.io/sigmacomputing
+SimpliSafe | https://boards.greenhouse.io/simplisafe
+Skydio | https://jobs.ashbyhq.com/skydio
+Smartsheet | https://boards.greenhouse.io/smartsheet
+Socure | https://jobs.ashbyhq.com/socure
+SpotDraft | https://jobs.ashbyhq.com/spotdraft
+Sprout Social | https://boards.greenhouse.io/sproutsocial
+Starburst | https://boards.greenhouse.io/starburst
+StockX | https://boards.greenhouse.io/stockx
+Sumo Logic | https://boards.greenhouse.io/sumologic
+SurveyMonkey | https://jobs.ashbyhq.com/surveymonkey
+Sweetgreen | https://boards.greenhouse.io/sweetgreen
+Tala | https://jobs.lever.co/tala
+Tanium | https://boards.greenhouse.io/tanium
+Thumbtack | https://jobs.ashbyhq.com/thumbtack
+Tines | https://boards.greenhouse.io/tines
+Trustpilot | https://boards.greenhouse.io/trustpilot
+Typeform | https://boards.greenhouse.io/typeform
+Upstart | https://boards.greenhouse.io/upstart
+Upwork | https://boards.greenhouse.io/upwork
+Vise | https://jobs.ashbyhq.com/vise
+Whoop | https://jobs.ashbyhq.com/whoop
+Yext | https://boards.greenhouse.io/yext
+Yugabyte | https://boards.greenhouse.io/yugabyte
+Zocdoc | https://boards.greenhouse.io/zocdoc
+Zuora | https://boards.greenhouse.io/zuora

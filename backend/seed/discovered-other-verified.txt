@@ -1,0 +1,9 @@
+# Checked 2026-10-16 14:06: 6 working, 0 not working
+
+OK   AlemHealth | https://careers.smartrecruiters.com/alemhealth | 1 jobs via smartrecruiters
+OK   Finku | https://careers.smartrecruiters.com/finku | 1 jobs via smartrecruiters
+OK   Kodo | https://careers.smartrecruiters.com/kodo | 1 jobs via smartrecruiters
+OK   Vinci Games | https://careers.smartrecruiters.com/vincigames | 1 jobs via smartrecruiters
+OK   Vouch | https://careers.smartrecruiters.com/vouch | 2 jobs via smartrecruiters
+OK   Yassir | https://careers.smartrecruiters.com/yassir | 6 jobs via smartrecruiters
+

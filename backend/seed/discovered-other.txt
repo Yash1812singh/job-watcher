@@ -1,0 +1,7 @@
+# Found 2026-10-16 14:04 from the Y Combinator company dataset; 6 of 991 companies have a job board with jobs.
+AlemHealth | https://careers.smartrecruiters.com/alemhealth
+Finku | https://careers.smartrecruiters.com/finku
+Kodo | https://careers.smartrecruiters.com/kodo
+Vinci Games | https://careers.smartrecruiters.com/vincigames
+Vouch | https://careers.smartrecruiters.com/vouch
+Yassir | https://careers.smartrecruiters.com/yassir

@@ -1,0 +1,77 @@
+# Found 2026-10-16 14:10 from the Y Combinator company dataset; 76 of 254 companies have a job board with jobs.
+Abridge | https://jobs.ashbyhq.com/abridge
+Airship | https://boards.greenhouse.io/airship
+Anaplan | https://boards.greenhouse.io/anaplan
+Appian | https://boards.greenhouse.io/appian
+Aptos | https://boards.greenhouse.io/aptoslabs
+Arista Networks | https://careers.smartrecruiters.com/aristanetworks
+Armis | https://careers.smartrecruiters.com/armis
+Attio | https://jobs.ashbyhq.com/attio
+Backblaze | https://boards.greenhouse.io/backblaze
+Betterment | https://boards.greenhouse.io/betterment
+Bill.com | https://boards.greenhouse.io/billcom
+Block | https://boards.greenhouse.io/block
+Brightwheel | https://jobs.ashbyhq.com/brightwheel
+Buildkite | https://boards.greenhouse.io/buildkite
+Built Technologies | https://boards.greenhouse.io/getbuilt
+Cameo | https://boards.greenhouse.io/cameo
+Capsule | https://jobs.ashbyhq.com/capsule
+Captain Fresh | https://careers.smartrecruiters.com/captainfresh
+Circle | https://jobs.ashbyhq.com/circle
+CloudSEK | https://boards.greenhouse.io/cloudsek
+Collibra | https://boards.greenhouse.io/collibra
+Contentful | https://boards.greenhouse.io/contentful
+Contentsquare | https://jobs.lever.co/contentsquare
+Coupa | https://jobs.lever.co/coupa
+Cribl | https://boards.greenhouse.io/cribl
+Databento | https://boards.greenhouse.io/databento
+Degreed | https://boards.greenhouse.io/degreed
+Delinea | https://jobs.ashbyhq.com/delinea
+DriveWealth | https://boards.greenhouse.io/drivewealth
+Duck Duck Go | https://jobs.ashbyhq.com/duck-duck-go
+Enable | https://jobs.lever.co/enable
+Expensify | https://jobs.ashbyhq.com/expensify
+Fanduel | https://boards.greenhouse.io/fanduel
+Fireblocks | https://boards.greenhouse.io/fireblocks
+Flatiron Health | https://boards.greenhouse.io/flatironhealth
+Formlabs | https://boards.greenhouse.io/formlabs
+HackerOne | https://jobs.ashbyhq.com/hackerone
+Hex | https://jobs.ashbyhq.com/hex
+Jobber | https://jobs.ashbyhq.com/jobber
+Komodo Health | https://boards.greenhouse.io/komodohealth
+Lemonade | https://jobs.ashbyhq.com/lemonade
+Lightmatter | https://boards.greenhouse.io/lightmatter
+Lucidworks | https://jobs.lever.co/lucidworks
+Nansen | https://jobs.ashbyhq.com/nansen
+Neuralink | https://boards.greenhouse.io/neuralink
+Nium | https://jobs.lever.co/nium
+Nobroker | https://careers.smartrecruiters.com/nobroker
+Nylas | https://jobs.ashbyhq.com/nylas
+Obsidian Security | https://boards.greenhouse.io/obsidiansecurity
+Ontra | https://jobs.ashbyhq.com/ontra
+Paxos | https://jobs.ashbyhq.com/paxos
+Pendo | https://boards.greenhouse.io/pendo
+Persona | https://jobs.ashbyhq.com/persona
+Philo | https://jobs.ashbyhq.com/philo
+Poshmark | https://jobs.ashbyhq.com/poshmark
+Prefect | https://jobs.ashbyhq.com/prefect
+Quantexa | https://jobs.ashbyhq.com/quantexa
+Rebel Foods | https://careers.smartrecruiters.com/rebelfoods
+Relativity | https://boards.greenhouse.io/relativity
+Roofstock | https://boards.greenhouse.io/roofstock
+Runway Financial | https://jobs.ashbyhq.com/runway
+Secureframe | https://jobs.ashbyhq.com/secureframe
+ServiceTitan | https://careers.smartrecruiters.com/servicetitan
+Sonder | https://jobs.ashbyhq.com/sonder
+Swile | https://jobs.lever.co/swile
+Thoughtworks | https://boards.greenhouse.io/thoughtworks
+Twist Bioscience | https://boards.greenhouse.io/twistbioscience
+Upgrade | https://boards.greenhouse.io/upgrade
+Veeva | https://jobs.lever.co/veeva
+Wayfair | https://careers.smartrecruiters.com/wayfair
+Wealthfront | https://jobs.lever.co/wealthfront
+Weaviate | https://jobs.ashbyhq.com/weaviate
+Wolt | https://boards.greenhouse.io/wolt
+Workato | https://boards.greenhouse.io/workato
+Zilliz | https://jobs.lever.co/zilliz
+Zipline | https://boards.greenhouse.io/flyzipline
