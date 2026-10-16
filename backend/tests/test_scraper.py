@@ -246,10 +246,25 @@ def test_microsoft_jobs_come_from_its_search_api_newest_first():
     result = scan("https://jobs.careers.microsoft.com/global/en/search?l=en_us",
                   client=httpx.Client(transport=httpx.MockTransport(handler)))
     [job] = result.jobs
-    assert result.method == "microsoft"
+    assert result.method == "eightfold"
     assert (job.external_id, job.url, job.location) == (
         "200061959", "https://apply.careers.microsoft.com/careers/job/1970393557040974", "India, Uttar Pradesh, Noida")
     assert job.posted_at.startswith("2026-")
+
+
+def test_oracle_recruiting_sites_are_read_newest_first():
+    def handler(request):
+        assert "siteNumber=CX_1001" in request.url.params["finder"] and "POSTING_DATES_DESC" in request.url.params["finder"]
+        return httpx.Response(200, json={"items": [{"requisitionList": [
+            {"Id": "R1", "Title": "SDE ", "PostedDate": "2026-10-16", "PrimaryLocation": "Bengaluru, India"}]}]})
+
+    result = scan("https://jobs.example.com/hcmUI/CandidateExperience/en/sites/CX_1001/requisitions",
+                  client=httpx.Client(transport=httpx.MockTransport(handler)))
+    [job] = result.jobs
+    assert result.method == "oracle"
+    assert (job.title, job.location, job.posted_at, job.url) == (
+        "SDE", "Bengaluru, India", "2026-10-16",
+        "https://jobs.example.com/hcmUI/CandidateExperience/en/sites/CX_1001/job/R1")
 
 
 def test_scan_follows_embedded_ats_on_a_company_page():

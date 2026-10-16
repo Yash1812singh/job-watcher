@@ -13,6 +13,7 @@ opened in headless Chrome and strategies 1-3 run again on the rendered page.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -254,8 +255,14 @@ def detect_feed(url: str) -> str | None:
         return "eightfold"
     if host == "higher.gs.com":
         return "goldman"
-    if host in ("apply.careers.microsoft.com", "jobs.careers.microsoft.com"):
-        return "microsoft"
+    if host in PCSX_SITES:
+        return "pcsx"
+    if "/hcmUI/CandidateExperience/" in url:
+        return "oracle"
+    if host == "ainterviews.com" and urlparse(url).path.startswith("/job_board/"):
+        return "ainterviews"
+    if host in SMALL_FEEDS:
+        return host
     return None
 
 
@@ -551,19 +558,26 @@ def _link_candidates(soup: BeautifulSoup, page_url: str) -> tuple[list[Job], boo
     return [job for job, _ in candidates.values()], False
 
 
-MICROSOFT_NEWEST = 30
+# Eightfold "PCSX" careers sites: page host -> (API host, company domain)
+PCSX_SITES = {
+    "apply.careers.microsoft.com": ("apply.careers.microsoft.com", "microsoft.com"),
+    "jobs.careers.microsoft.com": ("apply.careers.microsoft.com", "microsoft.com"),
+    "careers.qualcomm.com": ("careers.qualcomm.com", "qualcomm.com"),
+}
+PCSX_NEWEST = 30
 
 
-def fetch_microsoft_jobs(client: httpx.Client) -> list[Job]:
-    """Microsoft's careers site (Eightfold "PCSX"), newest first, 10 per page. It refuses
-    "compatible" user agents and allows only a few quick requests, so read just the newest
-    few pages, spaced out; Microsoft posts a few dozen roles a day."""
+def fetch_pcsx_jobs(client: httpx.Client, url: str) -> list[Job]:
+    """Eightfold "PCSX" careers sites (Microsoft, Qualcomm), newest first, 10 per page. They
+    refuse "compatible" user agents and allow only a few quick requests, so read just the
+    newest few pages, spaced out; these companies post a few dozen roles a day."""
+    host, domain = PCSX_SITES[urlparse(url).netloc.lower()]
     jobs, start = [], 0
-    while start < MICROSOFT_NEWEST:
+    while start < PCSX_NEWEST:
         if start:
             time.sleep(1)
-        resp = client.get("https://apply.careers.microsoft.com/api/pcsx/search",
-                          params={"domain": "microsoft.com", "query": "", "location": "", "start": start,
+        resp = client.get(f"https://{host}/api/pcsx/search",
+                          params={"domain": domain, "query": "", "location": "", "start": start,
                                   "sort_by": "timestamp"},
                           headers={"User-Agent": USER_AGENT.replace("compatible; ", "")})
         if resp.status_code == 429 and jobs:
@@ -575,7 +589,7 @@ def fetch_microsoft_jobs(client: httpx.Client) -> list[Job]:
             jobs.append(Job(
                 external_id=str(p.get("displayJobId") or p["id"]),
                 title=p["name"].strip(),
-                url=f"https://apply.careers.microsoft.com/careers/job/{p['id']}",
+                url=f"https://{host}/careers/job/{p['id']}",
                 location="; ".join(p.get("locations") or []) or None,
                 department=p.get("department"),
                 posted_at=_ms_to_iso(posted * 1000) if isinstance(posted, (int, float)) else None,
@@ -584,6 +598,89 @@ def fetch_microsoft_jobs(client: httpx.Client) -> list[Job]:
         if not batch:
             break
     return jobs
+
+
+ORACLE_NEWEST = 100
+
+
+def fetch_oracle_jobs(client: httpx.Client, url: str) -> list[Job]:
+    """Oracle Recruiting Cloud careers sites (Dell, JPMorgan, …):
+    <host>/hcmUI/CandidateExperience/<lang>/sites/<site>, newest first, 25 per page."""
+    parsed = urlparse(url)
+    match = re.search(r"/sites/([\w-]+)", parsed.path)
+    if not match:
+        raise ValueError("Oracle careers URL without a site, e.g. …/CandidateExperience/en/sites/CX_1")
+    site = match.group(1)
+    jobs, offset = [], 0
+    while offset < ORACLE_NEWEST:
+        resp = client.get(f"https://{parsed.netloc}/hcmRestApi/resources/latest/recruitingCEJobRequisitions",
+                          params={"onlyData": "true", "expand": "requisitionList.secondaryLocations",
+                                  "finder": f"findReqs;siteNumber={site},limit=25,offset={offset},"
+                                            "sortBy=POSTING_DATES_DESC"})
+        resp.raise_for_status()
+        items = resp.json().get("items") or [{}]
+        batch = items[0].get("requisitionList") or []
+        for r in batch:
+            jobs.append(Job(
+                external_id=str(r["Id"]),
+                title=r["Title"].strip(),
+                url=f"https://{parsed.netloc}/hcmUI/CandidateExperience/en/sites/{site}/job/{r['Id']}",
+                location=r.get("PrimaryLocation"),
+                department=r.get("Organization") or r.get("JobFamily"),
+                posted_at=r.get("PostedDate"),   # a date, not a time
+            ))
+        offset += len(batch)
+        if len(batch) < 25:
+            break
+    return jobs
+
+
+def fetch_ainterviews_jobs(client: httpx.Client, url: str) -> list[Job]:
+    """Job boards hosted on ainterviews.com (Lenskart): ainterviews.com/job_board/<board>."""
+    board = urlparse(url).path.split("/")[2]
+    data = _get_json(client, f"https://ainterviews.com/api/job_board/{board}/jobs/")
+    return [Job(external_id=str(j["id"]), title=j["title"].strip(),
+                url=urljoin("https://ainterviews.com", j.get("apply_url") or f"/job_board/{board}/job/{j['id']}/"),
+                location=j.get("location"), department=j.get("category"), posted_at=j.get("posted_date"))
+            for j in data.get("jobs", [])]
+
+
+def _sharechat_jobs(client: httpx.Client) -> list[Job]:
+    jobs = []
+    for group in _get_json(client, "https://sharechat.com/api/careersList?limit=100")["data"]["careersList"]:
+        for r in group["data"]:
+            # its job pages live on mynexthire, addressed by a base64 JSON blob holding the id
+            blob = {"pageType": "jd", "cvSource": "careers", "reqId": r["requisitionId"],
+                    "requester": {"id": "", "code": "", "name": ""}, "page": "careers", "bufilter": -1, "customFields": {}}
+            p = base64.b64encode(json.dumps(blob, separators=(",", ":")).encode()).decode()
+            jobs.append(Job(external_id=str(r["requisitionId"]), title=r["requisitionTitle"].strip(),
+                            url=f"https://sharechat.mynexthire.com/employer/jobs?src=careers&p={p}",
+                            location=", ".join(r.get("officeLocationNames") or []) or None,
+                            department=r.get("orgUnitName")))
+    return jobs
+
+
+def _juspay_jobs(client: httpx.Client) -> list[Job]:
+    data = _get_json(client, "https://joinus.juspay.in/api/careerJobOpening?limit=1000&isGlobal=true")
+    return [Job(external_id=j["job_id"], title=j["job_title"].strip(), url=f"https://juspay.io/careers/{j['job_id']}",
+                location=j.get("job_location"), department=j.get("category"))
+            for j in data.get("allJobs", []) if j.get("opening_status", True)]
+
+
+def _urban_company_jobs(client: httpx.Client) -> list[Job]:
+    resp = client.post("https://www.urbanclap.com/api/v2/platform-gateway/getAllJobs")
+    resp.raise_for_status()
+    return [Job(external_id=j["job_id"], title=j["job_title"].strip(), url=j["apply_url"],
+                location="; ".join(j.get("location") or []) or None, department=j.get("parent_department"))
+            for j in resp.json().get("jobs", [])]
+
+
+# Careers pages that build their list from the company's own small API: page host -> reader
+SMALL_FEEDS = {
+    "sharechat.com": _sharechat_jobs,
+    "juspay.io": _juspay_jobs,
+    "careers.urbancompany.com": _urban_company_jobs,
+}
 
 
 GOLDMAN_QUERY = """query GetRoles($searchQueryInput: RoleSearchQueryInput!) {
@@ -746,9 +843,16 @@ def scan(url: str, client: httpx.Client | None = None, render: bool | None = Non
             return ScanResult(method="eightfold", jobs=fetch_eightfold_jobs(client, url))
         if feed == "goldman":
             return ScanResult(method="goldman", jobs=fetch_goldman_jobs(client))
-        if feed == "microsoft":
-            return ScanResult(method="microsoft", jobs=fetch_microsoft_jobs(client),
-                              note=f"Checks Microsoft's newest {MICROSOFT_NEWEST} postings each time.")
+        if feed == "pcsx":
+            return ScanResult(method="eightfold", jobs=fetch_pcsx_jobs(client, url),
+                              note=f"Checks the newest {PCSX_NEWEST} postings each time.")
+        if feed == "oracle":
+            return ScanResult(method="oracle", jobs=fetch_oracle_jobs(client, url),
+                              note=f"Checks the newest {ORACLE_NEWEST} postings each time.")
+        if feed == "ainterviews":
+            return ScanResult(method="ainterviews", jobs=fetch_ainterviews_jobs(client, url))
+        if feed in SMALL_FEEDS:
+            return ScanResult(method="company api", jobs=SMALL_FEEDS[feed](client))
 
         ats = detect_ats(url)
         if ats:
