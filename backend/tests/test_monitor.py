@@ -95,6 +95,14 @@ def test_page_read_again_after_a_spell_of_nothing_is_not_a_flood(site_id, monkey
     assert all(_jobs()[f"w{i}"]["fresh_at"] is None for i in range(10))
 
 
+def test_a_feed_without_posting_times_keeps_the_stored_ones(site_id, monkeypatch):
+    _scan_returns(monkeypatch, Job("1", "Engineer", "u1", posted_at="2026-10-16T10:00:00Z"))
+    monitor.scan_site(site_id)
+    _scan_returns(monkeypatch, Job("1", "Engineer", "u1"))
+    monitor.scan_site(site_id)
+    assert _jobs()["1"]["posted_at"] == "2026-10-16T10:00:00Z"
+
+
 def test_empty_first_scan_does_not_use_up_the_baseline(site_id, monkeypatch):
     _scan_returns(monkeypatch)
     monitor.scan_site(site_id)
@@ -120,6 +128,17 @@ def test_due_sites_respect_interval(site_id, monkeypatch):
     _scan_returns(monkeypatch)
     monitor.scan_site(site_id)
     assert monitor.due_site_ids() == []                 # checked just now
+
+
+def test_most_overdue_sites_are_checked_first(site_id):
+    now = datetime.now(timezone.utc)
+    with db.connect() as conn:
+        conn.execute("UPDATE sites SET interval_minutes = 5, last_checked_at = ? WHERE id = ?",
+                     ((now - timedelta(minutes=6)).isoformat(), site_id))
+        late = conn.execute("INSERT INTO sites (url, name, created_at, interval_minutes, last_checked_at) "
+                            "VALUES ('https://b.com/jobs', 'b', ?, 2, ?)",
+                            (db.now_iso(), (now - timedelta(minutes=6)).isoformat())).lastrowid
+    assert monitor.due_site_ids() == [late, site_id]   # 3 intervals behind before 1.2
 
 
 def test_exact_time_normalizes_formats():

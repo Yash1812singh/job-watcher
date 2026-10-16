@@ -89,6 +89,8 @@ def scan_site(site_id: int) -> None:
                 exact = db.exact_time(job.posted_at)
                 if job.external_id in existing:
                     old = stored[job.external_id]
+                    # a feed without posting times (e.g. Ashby's job list) keeps the one already stored
+                    job.posted_at = job.posted_at or old["posted_at"]
                     # Only write when something changed; big boards list thousands of jobs a check.
                     if (old["is_active"], old["title"], old["url"], old["location"], old["department"],
                             old["posted_at"]) != (1, job.title, job.url, job.location, job.department, job.posted_at):
@@ -150,32 +152,37 @@ def due_site_ids() -> list[int]:
     due = []
     for r in rows:
         last = r["last_checked_at"]
-        if last is None or datetime.fromisoformat(last) + timedelta(minutes=r["interval_minutes"]) <= now:
-            due.append(r["id"])
-    return due
+        if last is None:
+            due.append((float("inf"), r["id"]))
+            continue
+        waited = (now - datetime.fromisoformat(last)) / timedelta(minutes=r["interval_minutes"])
+        if waited >= 1:
+            due.append((waited, r["id"]))
+    # When there's more to check than time allows, the most overdue go first, relative to
+    # their interval: a 2-minute company 6 minutes late is further behind than a 5-minute one.
+    return [site_id for _, site_id in sorted(due, key=lambda d: -d[0])]
 
 
 async def run_forever(stop: asyncio.Event) -> None:
     """Check every due company, several at a time, so one slow site (e.g. one that needs
     the browser) doesn't delay catching a new posting elsewhere."""
     log.info("monitor started (tick %ss, %s parallel)", TICK_SECONDS, MAX_PARALLEL_SCANS)
-    limit = asyncio.Semaphore(MAX_PARALLEL_SCANS)
     running: dict[int, asyncio.Task] = {}
-
-    async def run_one(site_id: int) -> None:
-        async with limit:
-            await asyncio.to_thread(scan_site, site_id)
+    stopping = asyncio.create_task(stop.wait())
 
     while not stop.is_set():
-        for site_id in due_site_ids():
-            if site_id not in running:
-                task = asyncio.create_task(run_one(site_id))
-                running[site_id] = task
-                task.add_done_callback(lambda _t, sid=site_id: running.pop(sid, None))
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=TICK_SECONDS)
-        except asyncio.TimeoutError:
-            pass
+        # Start checks only as slots free up, picking the most overdue each time, so a company
+        # that falls due later can still go ahead of ones that are less behind.
+        for sid in [sid for sid, t in running.items() if t.done()]:
+            del running[sid]
+        free = MAX_PARALLEL_SCANS - len(running)
+        if free > 0:
+            for site_id in [sid for sid in due_site_ids() if sid not in running][:free]:
+                running[site_id] = asyncio.create_task(asyncio.to_thread(scan_site, site_id))
+        # wake when a check finishes (a slot is free) or after a tick, whichever comes first
+        await asyncio.wait([stopping, *running.values()], timeout=TICK_SECONDS,
+                           return_when=asyncio.FIRST_COMPLETED)
+    stopping.cancel()
     # Don't wait for checks in progress (a browser check can take ~45 s): an interrupted check
     # writes nothing and simply runs again after the restart.
     log.info("monitor stopped (%d check(s) left unfinished)", len(running))

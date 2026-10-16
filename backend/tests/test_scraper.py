@@ -215,6 +215,25 @@ def test_goldman_roles_come_from_its_graphql_api():
         "186604_GS_MID_CAREER", "Analyst", "https://higher.gs.com/roles/186604", "Bengaluru, India")
 
 
+def test_ashby_reads_the_light_job_list_and_falls_back_to_the_full_feed():
+    briefs = {"data": {"jobBoard": {"teams": [{"id": "t1", "name": "Research"}],
+                                    "jobPostings": [{"id": "a1", "title": "Researcher ", "teamId": "t1",
+                                                     "locationName": "San Francisco"}]}}}
+    result = scan("https://jobs.ashbyhq.com/acme",
+                  client=_client({"https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobBoardWithTeams": briefs}))
+    [job] = result.jobs
+    assert result.method == "ashby"
+    assert (job.title, job.url, job.location, job.department, job.posted_at) == (
+        "Researcher", "https://jobs.ashbyhq.com/acme/a1", "San Francisco", "Research", None)
+
+    missing = {"data": {"jobBoard": None}}
+    full = {"jobs": [{"id": "a1", "title": "Researcher", "publishedAt": "2026-10-16T10:00:00Z", "isListed": True}]}
+    result = scan("https://jobs.ashbyhq.com/acme", client=_client({
+        "https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobBoardWithTeams": missing,
+        "https://api.ashbyhq.com/posting-api/job-board/acme": full}))
+    assert result.jobs[0].posted_at == "2026-10-16T10:00:00Z"
+
+
 def test_microsoft_jobs_come_from_its_search_api_newest_first():
     def handler(request):
         assert request.url.params["sort_by"] == "timestamp"

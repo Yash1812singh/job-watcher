@@ -88,6 +88,39 @@ def detect_ats(text: str) -> tuple[str, str] | None:
     return None
 
 
+ASHBY_QUERY = """query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
+  jobBoard: jobBoardWithTeams(organizationHostedJobsPageName: $organizationHostedJobsPageName) {
+    teams { id name }
+    jobPostings { id title teamId locationName }
+  }
+}"""
+
+
+def _fetch_ashby_briefs(client: httpx.Client, token: str) -> list[Job]:
+    """The job list Ashby's own board page loads: titles and places only. The public posting
+    API also sends every job's full description (13 MB for a big board), which is too heavy
+    to read every few minutes on a small server. Without a posting time, a new job is dated
+    from when it's first seen, i.e. within one check of going live."""
+    resp = client.post("https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobBoardWithTeams",
+                       json={"operationName": "ApiJobBoardWithTeams", "query": ASHBY_QUERY,
+                             "variables": {"organizationHostedJobsPageName": token}})
+    resp.raise_for_status()
+    board = resp.json()["data"]["jobBoard"]
+    if board is None:
+        raise ValueError(f"no Ashby board named {token}")
+    teams = {t["id"]: t["name"] for t in board.get("teams") or []}
+    return [
+        Job(
+            external_id=j["id"],
+            title=j["title"].strip(),
+            url=f"https://jobs.ashbyhq.com/{token}/{j['id']}",
+            location=j.get("locationName"),
+            department=teams.get(j.get("teamId")),
+        )
+        for j in board["jobPostings"]
+    ]
+
+
 def _get_json(client: httpx.Client, url: str) -> object:
     resp = client.get(url, headers={"Accept": "application/json"})
     resp.raise_for_status()
@@ -126,6 +159,10 @@ def fetch_ats_jobs(client: httpx.Client, ats: str, token: str, page_url: str = "
         return jobs
 
     if ats == "ashby":
+        try:
+            return _fetch_ashby_briefs(client, token)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            pass  # fall back to the full feed below
         data = _get_json(client, f"https://api.ashbyhq.com/posting-api/job-board/{token}")
         return [
             Job(
@@ -680,12 +717,26 @@ def _extract(client: httpx.Client, html: str, page_url: str, suffix: str = "") -
     return None
 
 
+_client: httpx.Client | None = None
+_client_lock = threading.Lock()
+
+
+def _shared_client() -> httpx.Client:
+    """One client for all checks: most go to the same few job-board hosts, so reusing their
+    connections skips a TLS handshake (and reloading certificates) on every check."""
+    global _client
+    with _client_lock:
+        if _client is None:
+            _client = httpx.Client(timeout=TIMEOUT, follow_redirects=True, headers={"User-Agent": USER_AGENT},
+                                   limits=httpx.Limits(max_connections=50, max_keepalive_connections=20))
+        return _client
+
+
 def scan(url: str, client: httpx.Client | None = None, render: bool | None = None) -> ScanResult:
     """Read one company careers page and return the jobs it lists.
     Raises ScanError if the page can't be read."""
     render = RENDER_ENABLED if render is None else render
-    own_client = client is None
-    client = client or httpx.Client(timeout=TIMEOUT, follow_redirects=True, headers={"User-Agent": USER_AGENT})
+    client = client or _shared_client()
     try:
         feed = detect_feed(url)
         if feed == "amazon":
@@ -743,6 +794,3 @@ def scan(url: str, client: httpx.Client | None = None, render: bool | None = Non
         raise ScanError(f"{e.response.status_code} from {e.request.url}") from e
     except httpx.HTTPError as e:
         raise ScanError(f"Couldn't reach {url}: {e.__class__.__name__}: {e}") from e
-    finally:
-        if own_client:
-            client.close()
