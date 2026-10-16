@@ -6,7 +6,7 @@ RUN npm ci --silent
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     JOB_WATCHER_DB=/data/jobwatcher.db \
