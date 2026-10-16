@@ -12,7 +12,8 @@ ENV PYTHONUNBUFFERED=1 \
     JOB_WATCHER_DB=/data/jobwatcher.db \
     JOB_WATCHER_FRONTEND=/app/frontend/dist \
     JOB_WATCHER_BROWSER_CHANNEL= \
-    HF_HOME=/tmp/hf
+    HF_HOME=/tmp/hf \
+    MALLOC_ARENA_MAX=2
 WORKDIR /app/backend
 COPY backend/requirements.txt ./
 # Playwright's own Chromium works on both x86 and ARM servers (Google Chrome is x86-only on Linux).
