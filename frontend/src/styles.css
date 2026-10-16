@@ -133,7 +133,7 @@ button.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--d
 .stats { align-items: center; }
 .jobs-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-bottom: 8px; }
 .count { color: var(--muted); font-size: 12px; margin: 10px 0 6px; font-variant-numeric: tabular-nums; }
-.empty { color: var(--muted); padding: 40px 0; text-align: center; max-width: 46ch; margin: 0 auto; }
+.empty-state { color: var(--muted); padding: 40px 0; text-align: center; max-width: 46ch; margin: 0 auto; }
 
 .job-list { list-style: none; margin: 0; padding: 0; }
 .job {

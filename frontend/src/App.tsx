@@ -535,7 +535,7 @@ export default function App() {
               </ul>
             </>
           ) : loaded ? (
-            <p className="empty">{emptyText}</p>
+            <p className="empty-state">{emptyText}</p>
           ) : null}
         </section>
       </main>

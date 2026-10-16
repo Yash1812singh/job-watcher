@@ -72,7 +72,10 @@ def scan_site(site_id: int) -> None:
             # job on it new: a company doesn't replace its whole list in one go.
             reread = site_row["baseline_done"] and len(found_ids) >= 3 and (
                 (active_before and not (found_ids & active_before))
-                or (_method_family(site_row["last_method"]) not in (None, _method_family(result.method))
+                or (_method_family(site_row["last_method"]) != _method_family(result.method)
+                    # "none" after earlier jobs means the page couldn't be read for a while
+                    # (e.g. no browser), not that the company just posted its whole list
+                    and (_method_family(site_row["last_method"]) is not None or existing)
                     and len(found_ids - existing) > len(found_ids) / 2))
             if reread:
                 log.info("site=%s is now read differently (%s -> %s); treating its listed jobs as existing",

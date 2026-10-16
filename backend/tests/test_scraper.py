@@ -146,6 +146,15 @@ def test_lever_feed_is_mapped():
     assert job.posted_at.startswith("2025-09-27")
 
 
+def test_workday_boards_named_jobs_and_myworkdaysite_urls_are_detected():
+    assert detect_ats("https://paypal.wd1.myworkdayjobs.com/jobs") == ("workday", "paypal/wd1/jobs")
+    assert detect_ats("https://wd1.myworkdaysite.com/recruiting/snapchat/snap") == ("workday", "snapchat/wd1/snap")
+    assert detect_ats("https://wd1.myworkdaysite.com/en-US/recruiting/wf/WellsFargoJobs") == (
+        "workday", "wf/wd1/WellsFargoJobs")
+    # the board's own API path in a page's source isn't a site name
+    assert detect_ats('fetch("https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs")') is None
+
+
 def test_workday_board_is_read_page_by_page():
     assert detect_ats("https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite") == (
         "workday", "nvidia/wd5/NVIDIAExternalCareerSite")

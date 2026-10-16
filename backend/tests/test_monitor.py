@@ -84,6 +84,17 @@ def test_page_read_differently_is_not_a_flood_of_new_jobs(site_id, monkeypatch):
     assert _jobs()["j20"]["fresh_at"] is not None and _jobs()["j20"]["is_baseline"] == 0
 
 
+def test_page_read_again_after_a_spell_of_nothing_is_not_a_flood(site_id, monkeypatch):
+    # read in a browser, then unreadable for a while (browser turned off), then via its job board
+    for method, jobs in [("links (rendered)", [Job(f"l{i}", f"Role {i}", f"u{i}") for i in range(5)]),
+                         ("none", []),
+                         ("workday", [Job(f"w{i}", f"Role {i}", f"v{i}") for i in range(10)])]:
+        monkeypatch.setattr(monitor, "scan", lambda url, m=method, j=jobs: ScanResult(method=m, jobs=j))
+        monitor.scan_site(site_id)
+        time.sleep(1.1)
+    assert all(_jobs()[f"w{i}"]["fresh_at"] is None for i in range(10))
+
+
 def test_empty_first_scan_does_not_use_up_the_baseline(site_id, monkeypatch):
     _scan_returns(monkeypatch)
     monitor.scan_site(site_id)

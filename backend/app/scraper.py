@@ -58,9 +58,15 @@ ATS_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("workable", re.compile(r"apply\.workable\.com/([\w-]+)", re.I)),
     ("smartrecruiters", re.compile(r"(?:careers|jobs)\.smartrecruiters\.com/([\w-]+)", re.I)),
     # Workday (NVIDIA, Salesforce, Adobe, Walmart, …): <tenant>.wd<N>.myworkdayjobs.com/[en-US/]<site>
-    ("workday", re.compile(r"([\w-]+)\.(wd\d+)\.myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?([\w-]+)", re.I)),
+    ("workday", re.compile(
+        r"(?P<tenant>[\w-]+)\.(?P<wd>wd\d+)\.myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?(?P<site>[\w-]+)", re.I)),
+    # the same boards also live at wd<N>.myworkdaysite.com/recruiting/<tenant>/<site> (Snap, Wells Fargo)
+    ("workday", re.compile(
+        r"(?P<wd>wd\d+)\.myworkdaysite\.com/(?:[a-z]{2}-[A-Z]{2}/)?recruiting/(?P<tenant>[\w-]+)/(?P<site>[\w-]+)", re.I)),
 ]
 _NOT_A_BOARD = {"embed", "v1", "api", "j", "jobs", "widget", "static", "wday"}
+# A Workday site name is chosen by the company and is often just "jobs"; only the API path is not a board.
+_NOT_A_WORKDAY_SITE = {"wday"}
 
 # How many of the newest postings to read from very large boards each check. They list
 # newest first, so this is where new jobs appear; older ones only matter to "listed" counts.
@@ -71,9 +77,12 @@ def detect_ats(text: str) -> tuple[str, str] | None:
     """Return (ats, board token) for the first ATS reference in a URL or page source."""
     for name, pattern in ATS_PATTERNS:
         for match in pattern.finditer(text):
-            # multi-part boards (Workday: tenant, wdN, site) are joined into one token
-            token = "/".join(g.strip(".") for g in match.groups())
-            if token and match.groups()[-1].lower() not in _NOT_A_BOARD:
+            if name == "workday":   # multi-part board, joined into one token: tenant/wdN/site
+                if match["site"].lower() not in _NOT_A_WORKDAY_SITE:
+                    return name, f"{match['tenant']}/{match['wd']}/{match['site']}"
+                continue
+            token = match.group(1).strip(".")
+            if token and token.lower() not in _NOT_A_BOARD:
                 return name, token
     return None
 
@@ -523,9 +532,14 @@ def _render(url: str) -> tuple[str, str]:
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(channel=BROWSER_CHANNEL, headless=True)
+            # small shared memory in containers crashes Chrome unless it uses /tmp instead
+            browser = p.chromium.launch(channel=BROWSER_CHANNEL, headless=True,
+                                        args=["--disable-dev-shm-usage", "--disable-gpu"])
             try:
                 page = browser.new_page(user_agent=USER_AGENT.replace("compatible; ", ""))
+                # job lists don't need pictures, fonts or video; skipping them saves memory and time
+                page.route("**/*", lambda route: route.abort()
+                           if route.request.resource_type in ("image", "media", "font") else route.continue_())
                 # Many careers pages load their jobs from a data file (e.g. careers.swiggy.in/api/jobs.json)
                 # and build cards that aren't plain links. Keep those JSON responses: they often
                 # point at the company's real job board.

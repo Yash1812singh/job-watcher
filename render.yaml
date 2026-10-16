@@ -14,9 +14,9 @@ services:
         sync: false
       - key: JOB_WATCHER_BACKUP_REPO
         value: YashSingh1812/job-watcher-data
-      # The free plan has 512 MB and a small CPU share: fewer checks at once, and no Chrome
+      # The free plan has 512 MB and a small CPU share: fewer checks at once, one Chrome at a time
       # (only the handful of companies found via "rendered" pages need it).
       - key: JOB_WATCHER_MAX_PARALLEL
         value: "6"
-      - key: JOB_WATCHER_RENDER
-        value: "0"
+      - key: JOB_WATCHER_MAX_BROWSERS
+        value: "1"

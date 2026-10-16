@@ -48,8 +48,8 @@ the app visits its own address every 10 minutes so the checks keep running.
    as `HF_TOKEN`. Render generates the website password: see Environment → `JOB_WATCHER_PASSWORD`.
 3. Every push to `main` redeploys automatically.
 
-The free plan has 512 MB and a small CPU share, so it checks 6 companies at a time and skips
-Chrome (`JOB_WATCHER_RENDER=0`); companies that only work with Chrome show an explanation instead.
+The free plan has 512 MB and a small CPU share, so it checks 6 companies at a time and opens
+one Chrome at a time (without images or fonts) for the few careers pages that need it.
 
 ## Host it on your own server (Oracle Cloud Always Free)
 
