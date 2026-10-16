@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 from datetime import datetime, timedelta, timezone
 
@@ -13,7 +14,8 @@ from .scraper import ScanError, scan
 log = logging.getLogger("jobwatcher.monitor")
 
 TICK_SECONDS = 10          # how often the loop looks for sites that are due
-MAX_PARALLEL_SCANS = 24    # companies checked at the same time (browser checks are capped separately)
+# companies checked at the same time (browser checks are capped separately); lower it on small servers
+MAX_PARALLEL_SCANS = int(os.environ.get("JOB_WATCHER_MAX_PARALLEL", "24"))
 _site_locks: dict[int, threading.Lock] = {}
 _locks_guard = threading.Lock()
 

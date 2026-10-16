@@ -1,0 +1,22 @@
+# Render Blueprint: free Docker web service. https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: job-watcher
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "8090"
+      - key: JOB_WATCHER_PASSWORD
+        generateValue: true
+      - key: HF_TOKEN
+        sync: false
+      - key: JOB_WATCHER_BACKUP_REPO
+        value: YashSingh1812/job-watcher-data
+      # The free plan has 512 MB and a small CPU share: fewer checks at once, and no Chrome
+      # (only the handful of companies found via "rendered" pages need it).
+      - key: JOB_WATCHER_MAX_PARALLEL
+        value: "6"
+      - key: JOB_WATCHER_RENDER
+        value: "0"

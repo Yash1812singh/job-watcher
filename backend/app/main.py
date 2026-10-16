@@ -30,12 +30,33 @@ def _cutoff(posted_within: int) -> str:
     return db.to_iso(datetime.now(timezone.utc) - timedelta(minutes=posted_within))
 
 
+async def _keep_awake(stop: asyncio.Event) -> None:
+    """Free Render services sleep after 15 minutes without visitors, which would stop the checks.
+    Visiting our own public address every 10 minutes counts as a visitor."""
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not url:
+        return
+    import httpx
+    async with httpx.AsyncClient(timeout=30) as client:
+        while True:
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=600)
+                return
+            except asyncio.TimeoutError:
+                pass
+            try:
+                await client.get(url.rstrip("/") + "/api/health")
+            except httpx.HTTPError as e:
+                logging.getLogger(__name__).warning("keep-awake ping failed: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await asyncio.to_thread(backup.restore)
     db.init()
     stop = asyncio.Event()
-    tasks = [asyncio.create_task(monitor.run_forever(stop)), asyncio.create_task(backup.run_forever(stop))]
+    tasks = [asyncio.create_task(monitor.run_forever(stop)), asyncio.create_task(backup.run_forever(stop)),
+             asyncio.create_task(_keep_awake(stop))]
     yield
     stop.set()
     await asyncio.gather(*tasks)

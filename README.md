@@ -33,26 +33,23 @@ Remove it with `./scripts/uninstall-service.sh` (your companies and jobs are kep
 Checks only happen while the Mac is awake. To keep checking with the lid open but the screen off,
 use System Settings → Battery/Energy → "Prevent automatic sleeping when the display is off".
 
-## Host it online for free (Hugging Face Spaces, no card needed)
+## Host it online for free (Render, no card needed)
 
-1. Make a free account at https://huggingface.co/join and create a token with **Write** access at
-   https://huggingface.co/settings/tokens.
-2. From `backend/`:
+Render's free plan runs the Docker image; `render.yaml` describes the service. Its disk is wiped
+on every restart, so the database is backed up to a private Hugging Face dataset (free) every
+15 minutes and restored from it at startup. Free services sleep after 15 minutes without visitors;
+the app visits its own address every 10 minutes so the checks keep running.
 
-   ```bash
-   .venv/bin/pip install -U huggingface_hub
-   .venv/bin/hf auth login                    # paste the token
-   .venv/bin/python ../deploy/hf_deploy.py    # asks for a website password the first time
-   ```
+1. Hugging Face: make an account and a **Write** token (https://huggingface.co/settings/tokens).
+   Optionally copy your local companies and jobs into the backup:
+   `cd backend && .venv/bin/hf auth login && .venv/bin/python ../deploy/seed_backup.py`
+2. Render: sign in with GitHub at https://dashboard.render.com, then open
+   https://render.com/deploy?repo=https://github.com/Yash1812singh/job-watcher and paste the token
+   as `HF_TOKEN`. Render generates the website password: see Environment → `JOB_WATCHER_PASSWORD`.
+3. Every push to `main` redeploys automatically.
 
-   This creates the Space `<you>/job-watcher` and a private dataset `<you>/job-watcher-data` that
-   holds a backup of the database (a Space's disk is wiped on restart; the app restores from the
-   backup at startup and saves to it every 15 minutes). Your current local companies and jobs are
-   copied into the backup on the first run. The site is at `https://<you>-job-watcher.hf.space`.
-3. Run `deploy/hf_deploy.py` again after changing the code.
-
-Free Spaces sleep after 48 hours without visits; `.github/workflows/keepalive.yml` visits the site
-daily so it stays awake.
+The free plan has 512 MB and a small CPU share, so it checks 6 companies at a time and skips
+Chrome (`JOB_WATCHER_RENDER=0`); companies that only work with Chrome show an explanation instead.
 
 ## Host it on your own server (Oracle Cloud Always Free)
 
@@ -166,6 +163,7 @@ cd backend && .venv/bin/python -m pytest -q
 | `JOB_WATCHER_PASSWORD` | unset | When set, the site and API ask for this password |
 | `JOB_WATCHER_BACKUP_REPO` | unset | Hugging Face dataset to back the database up to (needs `HF_TOKEN`) |
 | `JOB_WATCHER_BACKUP_MINUTES` | `15` | How often to back up |
+| `JOB_WATCHER_MAX_PARALLEL` | `24` | Companies checked at the same time |
 
 ## Known limits
 
