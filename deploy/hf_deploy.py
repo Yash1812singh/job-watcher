@@ -3,14 +3,14 @@
     cd backend && .venv/bin/hf auth login          # once; paste a token with "Write" access
     .venv/bin/python ../deploy/hf_deploy.py        # first deploy, and again after every change
 
-First run creates the Space and a private dataset for database backups, asks for a website
-password, and copies your local database into the backup so the Space starts with your companies.
+First run creates the Space and a private dataset for database backups, sets the website
+password (JOB_WATCHER_PASSWORD, or a generated one saved to .env), and copies your local database into the backup so the Space starts with your companies.
 """
 from __future__ import annotations
 
-import getpass
 import gzip
 import os
+import secrets
 import shutil
 import sqlite3
 import sys
@@ -50,7 +50,9 @@ def main() -> None:
     api.create_repo(data, repo_type="dataset", private=True, exist_ok=True)
 
     if first_time:
-        password = getpass.getpass("Choose a password for the website: ")
+        password = os.environ.get("JOB_WATCHER_PASSWORD") or secrets.token_urlsafe(12)
+        (ROOT / ".env").write_text(f"JOB_WATCHER_PASSWORD={password}\n")
+        print(f"Website password: {password}  (saved in .env)")
         api.add_space_secret(space, "JOB_WATCHER_PASSWORD", password)
         api.add_space_secret(space, "HF_TOKEN", token)
         api.add_space_variable(space, "JOB_WATCHER_BACKUP_REPO", data)
