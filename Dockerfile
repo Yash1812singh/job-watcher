@@ -11,13 +11,16 @@ ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     JOB_WATCHER_DB=/data/jobwatcher.db \
     JOB_WATCHER_FRONTEND=/app/frontend/dist \
-    JOB_WATCHER_BROWSER_CHANNEL=
+    JOB_WATCHER_BROWSER_CHANNEL= \
+    HF_HOME=/tmp/hf
 WORKDIR /app/backend
 COPY backend/requirements.txt ./
 # Playwright's own Chromium works on both x86 and ARM servers (Google Chrome is x86-only on Linux).
-RUN pip install --no-cache-dir -r requirements.txt playwright==1.49.1 \
+RUN pip install --no-cache-dir -r requirements.txt playwright==1.49.1 huggingface_hub==2.2.0 \
  && playwright install --with-deps chromium \
  && rm -rf /var/lib/apt/lists/*
+# Hosts like Hugging Face Spaces run the container as a non-root user.
+RUN mkdir -p /data && chmod 777 /data
 COPY backend/app ./app
 COPY --from=web /web/dist /app/frontend/dist
 VOLUME /data

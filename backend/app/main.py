@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
-from . import db, monitor
+from . import backup, db, monitor
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -32,12 +32,13 @@ def _cutoff(posted_within: int) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await asyncio.to_thread(backup.restore)
     db.init()
     stop = asyncio.Event()
-    task = asyncio.create_task(monitor.run_forever(stop))
+    tasks = [asyncio.create_task(monitor.run_forever(stop)), asyncio.create_task(backup.run_forever(stop))]
     yield
     stop.set()
-    await task
+    await asyncio.gather(*tasks)
 
 
 app = FastAPI(title="Job Watcher", lifespan=lifespan)

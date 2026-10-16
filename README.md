@@ -33,7 +33,28 @@ Remove it with `./scripts/uninstall-service.sh` (your companies and jobs are kep
 Checks only happen while the Mac is awake. To keep checking with the lid open but the screen off,
 use System Settings → Battery/Energy → "Prevent automatic sleeping when the display is off".
 
-## Host it online for free (Oracle Cloud Always Free)
+## Host it online for free (Hugging Face Spaces, no card needed)
+
+1. Make a free account at https://huggingface.co/join and create a token with **Write** access at
+   https://huggingface.co/settings/tokens.
+2. From `backend/`:
+
+   ```bash
+   .venv/bin/pip install -U huggingface_hub
+   .venv/bin/hf auth login                    # paste the token
+   .venv/bin/python ../deploy/hf_deploy.py    # asks for a website password the first time
+   ```
+
+   This creates the Space `<you>/job-watcher` and a private dataset `<you>/job-watcher-data` that
+   holds a backup of the database (a Space's disk is wiped on restart; the app restores from the
+   backup at startup and saves to it every 15 minutes). Your current local companies and jobs are
+   copied into the backup on the first run. The site is at `https://<you>-job-watcher.hf.space`.
+3. Run `deploy/hf_deploy.py` again after changing the code.
+
+Free Spaces sleep after 48 hours without visits; `.github/workflows/keepalive.yml` visits the site
+daily so it stays awake.
+
+## Host it on your own server (Oracle Cloud Always Free)
 
 Job Watcher has to run all the time and keep its database, so it needs a small always-on server
 rather than a "sleeps when idle" free tier. Oracle Cloud's Always Free tier gives one for free indefinitely.
@@ -143,6 +164,8 @@ cd backend && .venv/bin/python -m pytest -q
 | `JOB_WATCHER_FRONTEND` | `frontend/dist` | Built website served at `/` |
 | `JOB_WATCHER_BROWSER_CHANNEL` | `chrome` | Empty = Playwright's bundled Chromium (used in Docker) |
 | `JOB_WATCHER_PASSWORD` | unset | When set, the site and API ask for this password |
+| `JOB_WATCHER_BACKUP_REPO` | unset | Hugging Face dataset to back the database up to (needs `HF_TOKEN`) |
+| `JOB_WATCHER_BACKUP_MINUTES` | `15` | How often to back up |
 
 ## Known limits
 
