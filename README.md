@@ -48,7 +48,7 @@ the app visits its own address every 10 minutes so the checks keep running.
    as `HF_TOKEN`. Render generates the website password: see Environment → `JOB_WATCHER_PASSWORD`.
 3. Every push to `main` redeploys automatically.
 
-The free plan has 512 MB and a small CPU share, so it checks 6 companies at a time and doesn't
+The free plan has 512 MB and a small CPU share, so it checks 12 companies at a time and doesn't
 use Chrome (`JOB_WATCHER_RENDER=0`): even one browser can exceed 512 MB. Careers pages that need a
 browser show a note; point them at the job board they load from (Edit → URL) when there is one.
 A deploy can lose the last few minutes of checks (backups run every 5 minutes); they're redone.

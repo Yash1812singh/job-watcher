@@ -17,7 +17,7 @@ services:
       # The free plan has 512 MB and a small CPU share: fewer checks at once, and no Chrome
       # (even one browser can push it past 512 MB; the few pages that need one are read via their feeds).
       - key: JOB_WATCHER_MAX_PARALLEL
-        value: "6"
+        value: "12"
       - key: JOB_WATCHER_RENDER
         value: "0"
       # A deploy starts the new copy (which restores the backup) before stopping the old one,
