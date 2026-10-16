@@ -215,6 +215,24 @@ def test_goldman_roles_come_from_its_graphql_api():
         "186604_GS_MID_CAREER", "Analyst", "https://higher.gs.com/roles/186604", "Bengaluru, India")
 
 
+def test_microsoft_jobs_come_from_its_search_api_newest_first():
+    def handler(request):
+        assert request.url.params["sort_by"] == "timestamp"
+        start = int(request.url.params["start"])
+        positions = [] if start else [{"id": 1970393557040974, "displayJobId": "200061959", "name": "Principal SWE Manager",
+                                       "locations": ["India, Uttar Pradesh, Noida"], "postedTs": 1792149015,
+                                       "department": "Software Engineering"}]
+        return httpx.Response(200, json={"data": {"positions": positions}})
+
+    result = scan("https://jobs.careers.microsoft.com/global/en/search?l=en_us",
+                  client=httpx.Client(transport=httpx.MockTransport(handler)))
+    [job] = result.jobs
+    assert result.method == "microsoft"
+    assert (job.external_id, job.url, job.location) == (
+        "200061959", "https://apply.careers.microsoft.com/careers/job/1970393557040974", "India, Uttar Pradesh, Noida")
+    assert job.posted_at.startswith("2026-")
+
+
 def test_scan_follows_embedded_ats_on_a_company_page():
     client = _client({
         "https://acme.com/careers": '<div id="grnhse_app"></div><script src="https://boards.greenhouse.io/embed/job_board/js?for=acme"></script>',

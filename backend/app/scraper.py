@@ -17,6 +17,7 @@ import json
 import os
 import re
 import threading
+import time
 from dataclasses import dataclass, field
 from urllib.parse import parse_qsl, urldefrag, urljoin, urlparse
 
@@ -216,6 +217,8 @@ def detect_feed(url: str) -> str | None:
         return "eightfold"
     if host == "higher.gs.com":
         return "goldman"
+    if host in ("apply.careers.microsoft.com", "jobs.careers.microsoft.com"):
+        return "microsoft"
     return None
 
 
@@ -511,6 +514,41 @@ def _link_candidates(soup: BeautifulSoup, page_url: str) -> tuple[list[Job], boo
     return [job for job, _ in candidates.values()], False
 
 
+MICROSOFT_NEWEST = 30
+
+
+def fetch_microsoft_jobs(client: httpx.Client) -> list[Job]:
+    """Microsoft's careers site (Eightfold "PCSX"), newest first, 10 per page. It refuses
+    "compatible" user agents and allows only a few quick requests, so read just the newest
+    few pages, spaced out; Microsoft posts a few dozen roles a day."""
+    jobs, start = [], 0
+    while start < MICROSOFT_NEWEST:
+        if start:
+            time.sleep(1)
+        resp = client.get("https://apply.careers.microsoft.com/api/pcsx/search",
+                          params={"domain": "microsoft.com", "query": "", "location": "", "start": start,
+                                  "sort_by": "timestamp"},
+                          headers={"User-Agent": USER_AGENT.replace("compatible; ", "")})
+        if resp.status_code == 429 and jobs:
+            break   # rate limited partway: the newest postings are already in
+        resp.raise_for_status()
+        batch = (resp.json().get("data") or {}).get("positions") or []
+        for p in batch:
+            posted = p.get("postedTs")
+            jobs.append(Job(
+                external_id=str(p.get("displayJobId") or p["id"]),
+                title=p["name"].strip(),
+                url=f"https://apply.careers.microsoft.com/careers/job/{p['id']}",
+                location="; ".join(p.get("locations") or []) or None,
+                department=p.get("department"),
+                posted_at=_ms_to_iso(posted * 1000) if isinstance(posted, (int, float)) else None,
+            ))
+        start += len(batch)
+        if not batch:
+            break
+    return jobs
+
+
 GOLDMAN_QUERY = """query GetRoles($searchQueryInput: RoleSearchQueryInput!) {
   roleSearch(searchQueryInput: $searchQueryInput) {
     totalCount
@@ -657,6 +695,9 @@ def scan(url: str, client: httpx.Client | None = None, render: bool | None = Non
             return ScanResult(method="eightfold", jobs=fetch_eightfold_jobs(client, url))
         if feed == "goldman":
             return ScanResult(method="goldman", jobs=fetch_goldman_jobs(client))
+        if feed == "microsoft":
+            return ScanResult(method="microsoft", jobs=fetch_microsoft_jobs(client),
+                              note=f"Checks Microsoft's newest {MICROSOFT_NEWEST} postings each time.")
 
         ats = detect_ats(url)
         if ats:

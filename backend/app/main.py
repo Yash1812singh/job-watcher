@@ -115,8 +115,14 @@ class SiteCreate(BaseModel):
 
 
 class SiteUpdate(BaseModel):
+    url: str | None = None   # e.g. point a careers page at the job board it loads its list from
     name: str | None = Field(default=None, max_length=120)
     interval_minutes: int | None = Field(default=None, ge=MIN_INTERVAL, le=MAX_INTERVAL)
+
+    @field_validator("url")
+    @classmethod
+    def check_url(cls, v: str | None) -> str | None:
+        return None if v is None else _normalize_url(v)
 
 
 class MarkSeen(BaseModel):
@@ -249,6 +255,10 @@ def add_site(body: SiteCreate, background: BackgroundTasks) -> dict:
 def update_site(site_id: int, body: SiteUpdate) -> dict:
     _site(site_id)
     with db.connect() as conn:
+        if body.url is not None:
+            if conn.execute("SELECT 1 FROM sites WHERE url = ? AND id != ?", (body.url, site_id)).fetchone():
+                raise HTTPException(409, "This website is already being watched")
+            conn.execute("UPDATE sites SET url = ? WHERE id = ?", (body.url, site_id))
         if body.name is not None and body.name.strip():
             conn.execute("UPDATE sites SET name = ? WHERE id = ?", (body.name.strip(), site_id))
         if body.interval_minutes is not None:

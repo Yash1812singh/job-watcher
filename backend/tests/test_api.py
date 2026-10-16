@@ -81,6 +81,7 @@ def test_update_scan_and_remove_company(client):
     site_id = client.post("/api/sites", json={"url": "https://acme.com/careers"}).json()["id"]
     assert client.patch(f"/api/sites/{site_id}", json={"interval_minutes": 5}).json()["interval_minutes"] == 5
     assert client.patch(f"/api/sites/{site_id}", json={"interval_minutes": 0}).status_code == 422
+    assert client.patch(f"/api/sites/{site_id}", json={"url": "jobs.lever.co/acme"}).json()["url"] == "https://jobs.lever.co/acme"
     assert client.post(f"/api/sites/{site_id}/scan").json()["last_job_count"] == 3
     assert client.delete(f"/api/sites/{site_id}").status_code == 204
     assert client.get("/api/sites").json() == []
