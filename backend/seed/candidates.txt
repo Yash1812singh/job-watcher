@@ -321,3 +321,12 @@ Philips | https://philips.wd3.myworkdayjobs.com/jobs-and-careers
 Sprinklr | https://sprinklr.wd1.myworkdayjobs.com/careers
 Cadence | https://cadence.wd1.myworkdayjobs.com/External_Careers
 Barclays | https://barclays.wd3.myworkdayjobs.com/External_Career_Site_Barclays
+PhonePe | https://jobs.smartrecruiters.com/PHONEPELIMITED
+Visa | https://visa.wd5.myworkdayjobs.com/Visa
+BrowserStack | https://browserstack.wd3.myworkdayjobs.com/External
+Qualcomm | https://careers.qualcomm.com/careers
+Dell | https://enterpriseplatform.dell.com/hcmUI/CandidateExperience/en/sites/CX_1001
+Lenskart | https://ainterviews.com/job_board/lenskart_ho
+ShareChat | https://sharechat.com/careers
+Juspay | https://juspay.io/careers
+Urban Company | https://careers.urbancompany.com/
