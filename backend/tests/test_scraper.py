@@ -267,6 +267,24 @@ def test_oracle_recruiting_sites_are_read_newest_first():
         "https://jobs.example.com/hcmUI/CandidateExperience/en/sites/CX_1001/job/R1")
 
 
+def test_turbohire_pages_get_a_token_then_the_jobs():
+    def handler(request):
+        assert request.headers["referer"] == "https://acme.turbohire.co/"
+        if request.url.path == "/api/token/noauth":
+            return httpx.Response(200, json={"access_token": "t"})
+        assert request.headers["authorization"] == "Bearer t" and request.url.params["orgId"] == "org-1"
+        return httpx.Response(200, json={"Total": 1, "Result": [{
+            "JobId": "g1", "JobCode": "FIPL-1", "JobTitle": "SDE ", "Department": "Tech",
+            "PublishedDate": "2026-10-12T12:11:36Z", "Location": '[{"Address": "Bengaluru, India"}]'}]})
+
+    result = scan("https://acme.turbohire.co/dashboardv2?orgId=org-1&type=0",
+                  client=httpx.Client(transport=httpx.MockTransport(handler)))
+    [job] = result.jobs
+    assert result.method == "turbohire"
+    assert (job.external_id, job.title, job.location, job.url) == (
+        "FIPL-1", "SDE", "Bengaluru, India", "https://acme.turbohire.co/job/publicjobs/g1")
+
+
 def test_scan_follows_embedded_ats_on_a_company_page():
     client = _client({
         "https://acme.com/careers": '<div id="grnhse_app"></div><script src="https://boards.greenhouse.io/embed/job_board/js?for=acme"></script>',

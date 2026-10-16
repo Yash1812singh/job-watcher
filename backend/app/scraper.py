@@ -261,6 +261,8 @@ def detect_feed(url: str) -> str | None:
         return "oracle"
     if host == "ainterviews.com" and urlparse(url).path.startswith("/job_board/"):
         return "ainterviews"
+    if host.endswith(".turbohire.co") and dict(parse_qsl(urlparse(url).query)).get("orgId"):
+        return "turbohire"
     if host in SMALL_FEEDS:
         return host
     return None
@@ -675,6 +677,35 @@ def _urban_company_jobs(client: httpx.Client) -> list[Job]:
             for j in resp.json().get("jobs", [])]
 
 
+def fetch_turbohire_jobs(client: httpx.Client, url: str) -> list[Job]:
+    """TurboHire career pages (Flipkart): <company>.turbohire.co/dashboardv2?orgId=<id>.
+    The page gets an anonymous token, then asks for the jobs, newest first."""
+    parsed = urlparse(url)
+    org = dict(parse_qsl(parsed.query))["orgId"]
+    page = {"Referer": f"https://{parsed.netloc}/"}   # the token is only handed out to its own pages
+    token = client.get("https://thapi.azurewebsites.net/api/token/noauth", headers=page)
+    token.raise_for_status()
+    blank = {"Value": None, "FilterType": 0}
+    resp = client.post(f"https://thapi.azurewebsites.net/api/careerpagev2/filteredjobs?orgId={org}&pageType=0",
+                       headers={**page, "Authorization": f"Bearer {token.json()['access_token']}"},
+                       json={"SortByV2": {"Key": "PostedDate", "Order": 2}, "Keyword": "", "Department": "",
+                             "CustomFields": {}, **{k: blank for k in (
+                                 "BunitIds", "Experience", "JobTypes", "JobTypeV2", "Locations", "CreatedDate",
+                                 "Compensation", "Skills", "ClientIds")}})
+    resp.raise_for_status()
+    jobs = []
+    for j in resp.json().get("Result") or []:
+        try:
+            places = [p["Address"] for p in json.loads(j.get("Location") or "[]") if p.get("Address")]
+        except (ValueError, TypeError, KeyError):
+            places = []
+        jobs.append(Job(external_id=j.get("JobCode") or j["JobId"], title=j["JobTitle"].strip(),
+                        url=f"https://{parsed.netloc}/job/publicjobs/{j['JobId']}",
+                        location="; ".join(places) or None, department=j.get("Department"),
+                        posted_at=j.get("PublishedDate")))
+    return jobs
+
+
 # Careers pages that build their list from the company's own small API: page host -> reader
 SMALL_FEEDS = {
     "sharechat.com": _sharechat_jobs,
@@ -851,6 +882,8 @@ def scan(url: str, client: httpx.Client | None = None, render: bool | None = Non
                               note=f"Checks the newest {ORACLE_NEWEST} postings each time.")
         if feed == "ainterviews":
             return ScanResult(method="ainterviews", jobs=fetch_ainterviews_jobs(client, url))
+        if feed == "turbohire":
+            return ScanResult(method="turbohire", jobs=fetch_turbohire_jobs(client, url))
         if feed in SMALL_FEEDS:
             return ScanResult(method="company api", jobs=SMALL_FEEDS[feed](client))
 
