@@ -214,6 +214,8 @@ def detect_feed(url: str) -> str | None:
         return "amazon"
     if host.endswith("eightfold.ai") or host == "explore.jobs.netflix.net":
         return "eightfold"
+    if host == "higher.gs.com":
+        return "goldman"
     return None
 
 
@@ -509,6 +511,44 @@ def _link_candidates(soup: BeautifulSoup, page_url: str) -> tuple[list[Job], boo
     return [job for job, _ in candidates.values()], False
 
 
+GOLDMAN_QUERY = """query GetRoles($searchQueryInput: RoleSearchQueryInput!) {
+  roleSearch(searchQueryInput: $searchQueryInput) {
+    totalCount
+    items { roleId jobTitle division locations { primary city country } }
+  }
+}"""
+
+
+def fetch_goldman_jobs(client: httpx.Client) -> list[Job]:
+    """Goldman Sachs (higher.gs.com) reads its roles from this GraphQL API. It can't sort by
+    date, so the whole list (a few hundred roles) is read each time."""
+    jobs, page = [], 0
+    while True:
+        resp = client.post("https://api-higher.gs.com/gateway/api/v1/graphql",
+                           headers={"Referer": "https://higher.gs.com/"},
+                           json={"operationName": "GetRoles", "query": GOLDMAN_QUERY, "variables": {"searchQueryInput": {
+                               "page": {"pageSize": 100, "pageNumber": page},
+                               "sort": {"sortStrategy": "RELEVANCE", "sortOrder": "DESC"},
+                               "filters": [], "experiences": ["EARLY_CAREER", "PROFESSIONAL"], "searchTerm": ""}}})
+        resp.raise_for_status()
+        result = (resp.json().get("data") or {}).get("roleSearch") or {}
+        batch = result.get("items") or []
+        for r in batch:
+            places = r.get("locations") or []
+            place = next((loc for loc in places if loc.get("primary")), places[0] if places else {})
+            jobs.append(Job(
+                external_id=r["roleId"],
+                title=r["jobTitle"].strip(),
+                url=f"https://higher.gs.com/roles/{r['roleId'].split('_')[0]}",
+                location=", ".join(v for v in (place.get("city"), place.get("country")) if v) or None,
+                department=r.get("division"),
+            ))
+        page += 1
+        if len(batch) < 100 or len(jobs) >= result.get("totalCount", 0) or page >= 20:
+            break
+    return jobs
+
+
 # ── Rendering JavaScript pages ───────────────────────────────────────────────
 
 RENDER_ENABLED = os.environ.get("JOB_WATCHER_RENDER", "1") != "0"
@@ -615,6 +655,8 @@ def scan(url: str, client: httpx.Client | None = None, render: bool | None = Non
                               note=f"Checks Amazon's newest {NEWEST_LIMIT} postings each time.")
         if feed == "eightfold":
             return ScanResult(method="eightfold", jobs=fetch_eightfold_jobs(client, url))
+        if feed == "goldman":
+            return ScanResult(method="goldman", jobs=fetch_goldman_jobs(client))
 
         ats = detect_ats(url)
         if ats:

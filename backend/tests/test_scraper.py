@@ -200,6 +200,21 @@ def test_eightfold_feed_is_mapped():
     assert (result.jobs[0].title, len(result.jobs[0].posted_at)) == ("Senior Tax Analyst", 10)   # date only
 
 
+def test_goldman_roles_come_from_its_graphql_api():
+    def handler(request):
+        page = json.loads(request.content)["variables"]["searchQueryInput"]["page"]["pageNumber"]
+        items = [] if page else [{"roleId": "186604_GS_MID_CAREER", "jobTitle": "Analyst ", "division": "GBM",
+                                  "locations": [{"primary": False, "city": "Warsaw", "country": "Poland"},
+                                                {"primary": True, "city": "Bengaluru", "country": "India"}]}]
+        return httpx.Response(200, json={"data": {"roleSearch": {"totalCount": 1, "items": items}}})
+
+    result = scan("https://higher.gs.com/roles", client=httpx.Client(transport=httpx.MockTransport(handler)))
+    [job] = result.jobs
+    assert result.method == "goldman"
+    assert (job.external_id, job.title, job.url, job.location) == (
+        "186604_GS_MID_CAREER", "Analyst", "https://higher.gs.com/roles/186604", "Bengaluru, India")
+
+
 def test_scan_follows_embedded_ats_on_a_company_page():
     client = _client({
         "https://acme.com/careers": '<div id="grnhse_app"></div><script src="https://boards.greenhouse.io/embed/job_board/js?for=acme"></script>',
