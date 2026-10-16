@@ -315,3 +315,9 @@ Ford | https://efds.fa.em5.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX
 GE Aerospace | https://geaerospace.wd5.myworkdayjobs.com/GE_ExternalSite
 Honeywell | https://careers.honeywell.com/us/en/search-results
 Unilever | https://unilever.wd3.myworkdayjobs.com/Unilever_Experienced_Professionals
+Groww | https://boards.greenhouse.io/groww
+Canva | https://jobs.smartrecruiters.com/canva
+Philips | https://philips.wd3.myworkdayjobs.com/jobs-and-careers
+Sprinklr | https://sprinklr.wd1.myworkdayjobs.com/careers
+Cadence | https://cadence.wd1.myworkdayjobs.com/External_Careers
+Barclays | https://barclays.wd3.myworkdayjobs.com/External_Career_Site_Barclays
