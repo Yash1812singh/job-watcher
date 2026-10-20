@@ -159,3 +159,44 @@ def test_saved_jobs_are_retagged_when_the_rules_change(site_id, monkeypatch):
         assert db.retag(conn) == 1
     job = _jobs()["1"]
     assert (job["is_tech"], job["tech_category"], job["is_india"]) == (1, "Software Engineering", 1)
+
+
+def test_a_hung_check_is_abandoned_and_the_others_keep_going(site_id, monkeypatch):
+    import asyncio
+    import threading
+    with db.connect() as conn:
+        other = conn.execute("INSERT INTO sites (url, name, created_at) VALUES ('https://b.com/jobs', 'b', ?)",
+                             (db.now_iso(),)).lastrowid
+    release = threading.Event()
+
+    def fake_scan(url):
+        if "acme" in url:
+            release.wait(30)   # never answers (until the test ends)
+        return ScanResult(method="test", jobs=[Job("1", "Engineer", "u1")])
+
+    monkeypatch.setattr(monitor, "scan", fake_scan)
+    monkeypatch.setattr(monitor, "SCAN_TIMEOUT", 1)
+    monkeypatch.setattr(monitor, "MAX_PARALLEL_SCANS", 1)   # the hung check holds the only slot
+
+    async def run():
+        stop = asyncio.Event()
+        task = asyncio.create_task(monitor.run_forever(stop))
+        await asyncio.sleep(2.5)
+        stop.set()
+        await task
+
+    asyncio.run(run())
+    release.set()
+    with db.connect() as conn:
+        rows = {r["id"]: r for r in conn.execute("SELECT id, last_status, last_error FROM sites")}
+    assert rows[site_id]["last_status"] == "error" and "didn't answer" in rows[site_id]["last_error"]
+    assert rows[other]["last_status"] == "ok"   # checked once the hung one was given up on
+
+
+def test_health_fails_when_the_checker_stalls(monkeypatch):
+    import time as _time
+    from fastapi.testclient import TestClient
+    from app import main
+    monkeypatch.setattr(monitor, "_last_progress", _time.monotonic() - monitor.STALL_SECONDS - 5)
+    r = TestClient(main.app).get("/api/health")
+    assert r.status_code == 503 and r.json()["status"] == "stalled"

@@ -192,8 +192,13 @@ def tech_roles() -> list[dict]:
 
 
 @app.get("/api/health")
-def health() -> dict:
-    return {"status": "ok"}
+def health(response: Response) -> dict:
+    # Fails when the background checker has stopped making progress, so the host's health
+    # check restarts the service instead of leaving a website that no longer finds jobs.
+    checker = monitor.checker_status()
+    if checker["stalled"]:
+        response.status_code = 503
+    return {"status": "stalled" if checker["stalled"] else "ok", "checker": checker}
 
 
 @app.get("/api/sites")
