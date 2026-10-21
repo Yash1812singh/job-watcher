@@ -147,3 +147,11 @@ def test_city_and_state_together():
     p = autofill.Profile(city="Bangalore", state="Karnataka")
     assert autofill.rule_answer("In what city and state is your primary residence? (e.g. San Jose, CA)", p) == "Bangalore, Karnataka"
     assert autofill.rule_answer("State", p) == "Karnataka"
+
+
+def test_total_compensation_wording():
+    p = autofill.Profile(current_salary="18 LPA", desired_salary="26 LPA")
+    assert autofill.rule_answer("What is your current total compensation (CTC)", p) == "18 LPA"
+    assert autofill.rule_answer("What is your expected total compensation (CTC) for your next role?", p) == "26 LPA"
+    assert autofill.rule_answer("Please share your expected total CTC in INR (Lakhs per annum).", p) == "26 LPA"
+    assert autofill.rule_answer("Current CTC", p) == "18 LPA"

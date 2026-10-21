@@ -464,11 +464,18 @@
         picks.add(el);
         return false;
       }
-      default:
+      default: {
+        let v = value;
+        if (el.type === "number") { // a number box takes digits only: "+91 98765 43210" → 9876543210, "18 LPA" → 18
+          const digits = v.replace(/\D/g, "");
+          v = /phone|mobile|contact\s*n/i.test(f.label) && digits.length >= 10 ? digits.slice(-10) : (v.match(/\d+(\.\d+)?/) || [""])[0];
+          if (!v) return false;
+        }
         el.focus();
-        setValue(el, value);
+        setValue(el, v);
         el.dispatchEvent(new Event("blur", { bubbles: true, composed: true }));
         return true;
+      }
     }
   }
 
