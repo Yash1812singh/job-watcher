@@ -214,8 +214,10 @@
     const isRequired = (e) => e.required || e.getAttribute("aria-required") === "true" || !!e.getRootNode().host?.hasAttribute("required") || /[*✱]/.test((e.labels && e.labels[0] && e.labels[0].innerText) || "");
     for (const e of all("input, textarea, select")) {
       const type = (e.type || e.tagName).toLowerCase();
-      if (["hidden", "submit", "button", "search", "image", "reset", "password"].includes(type)) continue;
-      if (type !== "file" && (!visible(e) || e.disabled || e.readOnly)) continue;
+      const combo = e.getAttribute("role") === "combobox" || e.getAttribute("aria-autocomplete") === "list" || /^(listbox|true)$/.test(e.getAttribute("aria-haspopup") || "")
+        || !!e.closest('[class*="select__"], [class*="Select-"]');
+      if (["hidden", "submit", "button", "search", "image", "reset", "password"].includes(type) && !(type === "search" && combo)) continue;
+      if (type !== "file" && (!visible(e) || e.disabled || (e.readOnly && !combo))) continue;
       if (type !== "file" && e.closest('[aria-hidden="true"]')) continue;
       const id = `fwai-${run}-${n++}`;
       e.dataset.fwai = id;
@@ -233,17 +235,43 @@
         out.push({ id, kind: type, label: groupLabel(e) || optLabel, name: e.name || "", options: [optLabel], required: isRequired(e), value: "", el: e, ids: [e] });
         continue;
       }
-      const combo = e.getAttribute("role") === "combobox" || e.getAttribute("aria-autocomplete") === "list" || !!e.closest('[class*="select__"], [class*="Select-"]');
       const kind = e.tagName === "SELECT" ? "select" : type === "textarea" ? "textarea" : type === "file" ? "file" : combo ? "combobox" : type;
       const shown = combo ? clean(e.closest('[class*="select__control"], [class*="control"]')?.innerText) : "";
       const chosen = shown && !/^(select|choose|search|type)/i.test(shown) ? shown : "";
       out.push({
-        id, kind, label: labelOf(e), name: e.name || e.id || "", required: isRequired(e),
+        id, kind, label: labelOf(e), name: e.name || e.id || "", required: isRequired(e) || (combo && requiredNear(e)),
         value: kind === "file" ? (e.files?.length ? "attached" : "") : e.value || chosen || "",
-        options: e.tagName === "SELECT" ? [...e.options].map((o) => clean(o.text)) : [], el: e, ids: [e],
+        options: e.tagName === "SELECT" ? [...e.options].map((o) => clean(o.text)) : seen.get(e) || [], el: e, ids: [e],
+      });
+    }
+    // dropdowns that aren't <select> boxes: a button or box that opens a list of choices
+    for (const e of all(DROPDOWN)) {
+      if (!visible(e) || e.closest('[aria-hidden="true"]') || e.getAttribute("aria-disabled") === "true") continue;
+      if (e.querySelector('input:not([type=hidden]):not([aria-hidden="true"]), select, textarea')) continue; // its box is collected above
+      if (e.parentElement && closestDeep(e.parentElement, DROPDOWN)) continue; // the outer one only
+      const id = `fwai-${run}-${n++}`;
+      e.dataset.fwai = id;
+      // select2 draws a box for a hidden <select>: that <select> has the real label
+      const real = e.closest(".select2-container")?.previousElementSibling;
+      out.push({
+        id, kind: "dropdown", label: labelOf(real?.tagName === "SELECT" ? real : e), name: e.getAttribute("name") || e.id || "",
+        required: isRequired(e) || requiredNear(e) || /\brequired\b/i.test(e.getAttribute("aria-label") || "") || !!real?.required,
+        value: shownChoice(e), options: seen.get(e) || [], el: e, ids: [e],
       });
     }
     return out.map((f) => (f.kind === "checkbox" && f.ids.length === 1 ? { ...f, options: [] } : f));
+  }
+
+  const DROPDOWN = '[role="combobox"]:not(input), button[aria-haspopup="listbox"], [aria-haspopup="listbox"]:not(input), .select2-selection';
+  // what a dropdown shows: "" while it still says "Select…"
+  function shownChoice(e) {
+    const t = clean((e.innerText || e.value || e.getAttribute("aria-valuetext") || "").replace(/\u200b/g, ""));
+    return !t || /^(select|choose|please|pick|search|type|none selected|--)/i.test(t) ? "" : t;
+  }
+  // a "*" next to the question (custom dropdowns can't be marked required the usual way)
+  function requiredNear(e) {
+    const box = closestDeep(e, 'fieldset, [class*="field"], [class*="Field"], [class*="question"], [class*="form-group"], [data-automation-id^="formField"]');
+    return /[*✱]/.test(box?.querySelector('label, legend, [class*="label"], [class*="Label"]')?.innerText || "");
   }
 
   function isDone(f) {
@@ -266,6 +294,65 @@
     return new Promise((r) => setTimeout(r, ms));
   }
 
+  const OPTION = '[role="option"], [class*="select__option"], .select2-results__option, [role="listbox"] li';
+  const optText = (o) => clean(o.innerText || o.getAttribute("aria-label") || o.textContent);
+  const seen = new WeakMap(); // dropdown → the choices it showed when opened
+
+  function fire(el, types) {
+    for (const t of types) {
+      const E = t.startsWith("pointer") ? PointerEvent : MouseEvent;
+      el.dispatchEvent(new E(t, { bubbles: true, composed: true, cancelable: true, view: window, button: 0 }));
+    }
+  }
+  const key = (el, k, code) => el?.dispatchEvent(new KeyboardEvent("keydown", { key: k, code: k, keyCode: code, bubbles: true, composed: true }));
+
+  // Open a dropdown and wait for its choices (some open on mousedown, some on click, some on ↓).
+  async function openList(el) {
+    const shown = async (ms) => {
+      for (let t = 0; t < ms / 150; t++) {
+        await sleep(150);
+        const o = optionsFor(el);
+        if (o.length) return o;
+      }
+      return [];
+    };
+    el.scrollIntoView({ block: "center" });
+    el.focus();
+    fire(el, ["pointerdown", "mousedown"]);
+    let o = await shown(450);
+    if (o.length) return o;
+    fire(el, ["pointerup", "mouseup", "click"]);
+    o = await shown(900);
+    if (o.length) return o;
+    key(el, "ArrowDown", 40);
+    return shown(900);
+  }
+  function closeList(el) {
+    key(el, "Escape", 27);
+    if (document.activeElement !== el) key(document.activeElement, "Escape", 27);
+  }
+  // Read a dropdown's choices so the right one can be picked (then close it again).
+  async function peek(el) {
+    const texts = [...new Set((await openList(el)).map(optText).filter((t) => t && !/^(no options|loading|searching)/i.test(t)))].slice(0, 300);
+    closeList(el);
+    await sleep(200);
+    if (texts.length) seen.set(el, texts);
+    return texts;
+  }
+
+  const PLACES = { bangalore: "bengaluru", bombay: "mumbai", gurgaon: "gurugram", calcutta: "kolkata", madras: "chennai" };
+  const norm = (t) => clean(t).toLowerCase().replace(/\b(bangalore|bombay|gurgaon|calcutta|madras)\b/g, (m) => PLACES[m]);
+  function bestOption(opts, value) {
+    const v = norm(value);
+    if (!v) return null;
+    const first = v.split(",")[0].trim();
+    const t = opts.map((o) => [o, norm(optText(o))]);
+    const hit = t.find(([, x]) => x === v) || t.find(([, x]) => x.startsWith(v)) || t.find(([, x]) => x.includes(v))
+      || t.find(([, x]) => x.length > 2 && ` ${v} `.includes(` ${x} `))
+      || (first !== v && (t.find(([, x]) => x === first) || t.find(([, x]) => x.startsWith(first + ","))));
+    return hit ? hit[0] : null;
+  }
+
   function optionsFor(el) {
     const ids = [el.getAttribute("aria-controls"), el.getAttribute("aria-owns")].filter(Boolean).join(" ").split(/\s+/).filter(Boolean);
     let lists = ids.map((id) => byId(el, id)).filter(Boolean);
@@ -273,8 +360,9 @@
       const box = closestDeep(el, '[class*="select__"], [class*="Select"], [class*="combobox"], [class*="autocomplete"], [class*="field"]');
       if (box) lists = [box.parentElement || box];
     }
-    const opts = lists.flatMap((l) => [...l.querySelectorAll('[role="option"]')]).filter((o) => o.offsetParent !== null);
-    return opts.length ? opts : all('[role="option"]').filter((o) => o.offsetParent !== null); // a list drawn elsewhere on the page
+    const usable = (o) => visible(o) && o.getAttribute("aria-disabled") !== "true" && !o.closest("#fwai-panel-host");
+    const opts = lists.flatMap((l) => [...l.querySelectorAll(OPTION)]).filter(usable);
+    return opts.length ? opts : all(OPTION).filter(usable); // a list drawn elsewhere on the page (a popup at the end of <body>)
   }
 
   function attach(el, name, bytes, type) {
@@ -302,7 +390,7 @@
         return true;
       }
       case "select": {
-        const opt = [...el.options].find((o) => clean(o.text) === value);
+        const opt = [...el.options].find((o) => clean(o.text) === value) || bestOption([...el.options].slice(1), value);
         if (!opt) return false;
         setValue(el, opt.value);
         return true;
@@ -319,21 +407,30 @@
         if (!target.checked) target.click();
         return target.checked;
       }
+      case "dropdown":
       case "combobox": {
-        el.focus();
-        el.click();
-        setValue(el, value); // one go: React keeps it (a letter at a time gets reset)
-        const want = value.toLowerCase();
-        for (let t = 0; t < 24; t++) { // place lookups can take a few seconds
-          await sleep(250);
-          const opts = optionsFor(el);
-          const pick = opts.find((o) => o.innerText.trim().toLowerCase() === want) || opts.find((o) => o.innerText.toLowerCase().includes(want));
-          if (pick) {
-            pick.click();
-            picks.delete(el);
-            return true;
+        const typeable = f.kind === "combobox" && !el.readOnly;
+        let pick = f.options.length || !typeable ? bestOption(await openList(el), value) : null;
+        // a searchable box: type, then pick from what it finds (place lookups can take a few seconds)
+        const city = value.split(",")[0].trim();
+        const renamed = norm(city) !== city.toLowerCase() ? norm(city).replace(/^./, (c) => c.toUpperCase()) : city; // Bangalore → Bengaluru
+        for (const q of typeable && !pick ? [...new Set([value, city, renamed])] : []) {
+          el.focus();
+          setValue(el, q); // one go: React keeps it (a letter at a time gets reset)
+          for (let t = 0; t < 24 && !pick; t++) {
+            await sleep(250);
+            pick = bestOption(optionsFor(el), value);
           }
+          if (pick) break;
         }
+        if (pick) {
+          pick.scrollIntoView({ block: "nearest" });
+          fire(pick, ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]);
+          await sleep(300);
+          picks.delete(el);
+          return true;
+        }
+        if (!typeable) closeList(el);
         picks.add(el);
         return false;
       }
@@ -428,11 +525,14 @@
     const wanted = fields.filter((f) => (manual ? !isDone(f) : isFresh(f)));
     if (wanted.length) {
       p.busy(`Filling ${wanted.length} field${wanted.length === 1 ? "" : "s"}…`);
+      for (const f of wanted) {
+        if ((f.kind === "dropdown" || f.kind === "combobox") && !f.options.length) f.options = await peek(f.el);
+      }
       const text = pageText().replace(/\s+/g, " ").slice(0, 3000);
       const res = await ask({
         type: "decide",
         payload: { url: location.href, job: document.title.trim().slice(0, 200), job_id: auto?.jobId || null, page_text: text,
-                   fields: wanted.map(({ el, ids, ...f }) => f) },
+                   fields: wanted.map(({ el, ids, ...f }) => (f.kind === "dropdown" ? { ...f, kind: f.options.length ? "select" : "text" } : f)) },
       });
       for (const f of wanted) for (const e of f.ids) tried.set(e, sig(f));
       if (!res.ok) {

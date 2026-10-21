@@ -86,6 +86,17 @@ def test_pick_option_understands_yes_no_and_declines():
     assert autofill.pick_option(autofill.AGREE, ["I acknowledge"]) == "I acknowledge"
     assert autofill.pick_option("Pune", ["Select…", "Mumbai", "Pune"]) == "Pune"
     assert autofill.pick_option("Bengaluru", ["Mumbai", "Pune"]) is None
+    assert autofill.pick_option("Bangalore, Karnataka", ["Mumbai", "Bengaluru, Karnataka"]) == "Bengaluru, Karnataka"
+
+
+def test_dropdown_without_the_profiles_exact_words_goes_to_ai(monkeypatch):
+    asked = []
+    monkeypatch.setattr(autofill, "ai_answer", lambda p, q, job, text, options=None: asked.append(q) or "30-60 days")
+    profile = autofill.Profile(first_name="Asha", notice_period="45 days")
+    out = autofill.decide([{"id": "n", "kind": "select", "label": "Notice period", "options": ["Select", "Immediate", "30-60 days", "90 days"], "required": True}],
+                          profile=profile, resume_name="")
+    assert out["answers"] == [{"id": "n", "value": "30-60 days", "source": "ai"}]
+    assert "45 days" in asked[0]
 
 
 def test_a_base64_resume_is_served_decoded(tmp_path, monkeypatch):

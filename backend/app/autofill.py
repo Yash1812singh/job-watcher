@@ -352,16 +352,25 @@ def pick_option(answer: str, options: list[str]) -> str | None:
     if answer == AGREE:
         hit = next((o for o in opts if re.search(r"\b(yes|agree|accept|acknowledge|confirm|i do|i understand)\b", o, re.I)), None)
         return hit or (opts[0] if len(opts) == 1 else None)
-    a = answer.strip().lower()
+    a = _same_place(answer.strip().lower())
     for o in opts:
-        if o.strip().lower() == a:
+        if _same_place(o.strip().lower()) == a:
             return o
     if a.split()[0] in ("yes", "no"):
         w = a.split()[0]
         hit = next((o for o in opts if re.match(rf"\s*{w}\b", o, re.I)), None)
         if hit:
             return hit
-    return next((o for o in opts if a in o.lower() or o.lower() in a), None)
+    return next((o for o in opts if a in _same_place(o.lower()) or _same_place(o.lower()) in a), None)
+
+
+# a city's old and new names, so "Bangalore" in a profile matches "Bengaluru" in a list
+_PLACES = {"bangalore": "bengaluru", "bombay": "mumbai", "gurgaon": "gurugram", "calcutta": "kolkata",
+           "madras": "chennai", "poona": "pune", "trivandrum": "thiruvananthapuram", "baroda": "vadodara"}
+
+
+def _same_place(t: str) -> str:
+    return re.sub(r"\b(" + "|".join(_PLACES) + r")\b", lambda m: _PLACES[m.group(1)], t)
 
 
 # ── AI ───────────────────────────────────────────────────────────────────────
@@ -462,10 +471,13 @@ def decide(fields: list[dict], job: str = "", page_text: str = "", profile: Prof
         answer = rule_answer(label, profile)
         if kind in ("radio", "checkbox", "select", "combobox") and options:
             choice = pick_option(answer, options) if answer else None
-            if choice is None and answer is None and (required or kind == "radio"):
-                ask_ai.append((f, options))
-            elif choice is not None:
+            if choice is not None:
                 answers.append({"id": f["id"], "value": choice, "source": "profile"})
+            elif answer is None and (required or kind == "radio"):
+                ask_ai.append((f, options))
+            elif isinstance(answer, str) and answer and not answer.startswith("__"):
+                # the profile has an answer but not in these words ("45 days" vs "30-60 days"): closest option
+                ask_ai.append(({**f, "label": f"{label} (the applicant's own answer: {answer})"}, options))
             elif required:
                 missing.append(label)
             continue
