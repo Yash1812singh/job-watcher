@@ -46,6 +46,9 @@ function Section({ id, title, intro, children }: { id: string; title: string; in
 }
 
 const YES_NO: Opt[] = ["Yes", "No"];
+// same windows as Job Watcher, 30 minutes by default
+const WINDOWS: [string, string][] = [["15", "15 min"], ["30", "30 min"], ["60", "1 hour"], ["120", "2 hours"], ["360", "6 hours"], ["1440", "24 hours"]];
+const WINDOW_KEY = "fill-with-ai.window";
 const DECLINE: Opt[] = [["", "Prefer not to say"]];
 const ago = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -191,11 +194,22 @@ function JobsTab({ hasKey, profilePct, go }: { hasKey: boolean; profilePct: numb
   const [q, setQ] = useState("");
   const [india, setIndia] = useState(true);
   const [tech, setTech] = useState(true);
-  const [within, setWithin] = useState("72");
+  const [within, setWithinState] = useState(() => {
+    try {
+      const v = localStorage.getItem(WINDOW_KEY) ?? "";
+      return WINDOWS.some(([m]) => m === v) ? v : "30";
+    } catch {
+      return "30";
+    }
+  });
+  const setWithin = (v: string) => {
+    setWithinState(v);
+    try { localStorage.setItem(WINDOW_KEY, v); } catch { /* not remembered in private mode */ }
+  };
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [error, setError] = useState("");
   const load = useCallback(() => {
-    const params = new URLSearchParams({ q, india: String(india), tech: String(tech), within_hours: within, limit: "150" });
+    const params = new URLSearchParams({ q, india: String(india), tech: String(tech), within_minutes: within, limit: "200" });
     api<Job[]>(`/jobs?${params}`).then((j) => { setJobs(j); setError(""); }).catch((e) => setError((e as Error).message));
   }, [q, india, tech, within]);
   useEffect(() => {
@@ -203,7 +217,7 @@ function JobsTab({ hasKey, profilePct, go }: { hasKey: boolean; profilePct: numb
     return () => clearTimeout(t);
   }, [load]);
   useEffect(() => {
-    const t = setInterval(load, 60_000); // new postings arrive every few minutes
+    const t = setInterval(load, 30_000); // companies are checked every minute or two
     return () => clearInterval(t);
   }, [load]);
   const open = (j: Job) => {
@@ -226,14 +240,18 @@ function JobsTab({ hasKey, profilePct, go }: { hasKey: boolean; profilePct: numb
         <input aria-label="Search jobs" placeholder="Search title, company or city" value={q} onChange={(e) => setQ(e.target.value)} />
         <label className="f-check"><input type="checkbox" checked={india} onChange={(e) => setIndia(e.target.checked)} /> India only</label>
         <label className="f-check"><input type="checkbox" checked={tech} onChange={(e) => setTech(e.target.checked)} /> Tech roles only</label>
-        <select aria-label="Posted within" value={within} onChange={(e) => setWithin(e.target.value)}>
-          <option value="24">Last 24 hours</option><option value="72">Last 3 days</option>
-          <option value="168">Last 7 days</option><option value="720">Last 30 days</option>
-        </select>
+        <label className="f-check">Posted in the last
+          <select value={within} onChange={(e) => setWithin(e.target.value)}>
+            {WINDOWS.map(([m, label]) => <option key={m} value={m}>{label}</option>)}
+          </select>
+        </label>
       </div>
       {error && <p className="f-error">{error}</p>}
       {jobs === null ? <p className="f-muted">Loading jobs…</p> : jobs.length === 0 ? (
-        <div className="f-card f-empty">No jobs match. Try a longer time window or fewer filters.</div>
+        <div className="f-card f-empty">
+          No new jobs in the last {WINDOWS.find(([m]) => m === within)?.[1]}{q ? ` matching “${q}”` : ""}.
+          They appear here as soon as they're posted, so leave this open or pick a longer window.
+        </div>
       ) : (
         <ul className="f-jobs">
           {jobs.map((j) => (

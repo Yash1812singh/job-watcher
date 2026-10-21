@@ -255,11 +255,12 @@ def resume_for_extension(user: dict = Depends(extension_user)) -> Response:
 # ── Jobs and applications ────────────────────────────────────────────────────
 
 @router.get("/jobs")
-def jobs(q: str = "", india: bool = True, tech: bool = True, within_hours: int = Query(72, ge=1, le=24 * 60),
+def jobs(q: str = "", india: bool = True, tech: bool = True, within_minutes: int = Query(30, ge=1, le=30 * 24 * 60),
          limit: int = Query(100, ge=1, le=500), user: dict = Depends(current_user)) -> list[dict]:
-    """Open jobs Job Watcher found, newest first, with this user's application status."""
+    """Open jobs posted in the last `within_minutes` (30 by default, like Job Watcher), newest first,
+    with this user's application status."""
     where = ["j.is_active = 1", "j.fresh_at >= ?"]
-    params: list = [db.to_iso(datetime.now(timezone.utc) - timedelta(hours=within_hours))]
+    params: list = [db.to_iso(datetime.now(timezone.utc) - timedelta(minutes=within_minutes))]
     if india:
         where.append("j.is_india = 1")
     if tech:

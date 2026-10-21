@@ -1,5 +1,6 @@
 import io
 import zipfile
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -106,6 +107,14 @@ def test_jobs_list_and_applying_from_it(client):
     job = _add_job()
     jobs = client.get("/api/fill/jobs", headers=asha).json()
     assert [j["id"] for j in jobs] == [job]
+    # like Job Watcher: only jobs posted in the last 30 minutes unless asked for more
+    with db.connect() as conn:
+        conn.execute("UPDATE jobs SET fresh_at = ? WHERE id = ?",
+                     (db.to_iso(datetime.now(timezone.utc) - timedelta(minutes=45)), job))
+    assert client.get("/api/fill/jobs", headers=asha).json() == []
+    assert [j["id"] for j in client.get("/api/fill/jobs?within_minutes=60", headers=asha).json()] == [job]
+    with db.connect() as conn:
+        conn.execute("UPDATE jobs SET fresh_at = ? WHERE id = ?", (db.now_iso(), job))
     assert jobs[0]["apply_url"] == "https://jobs.lever.co/acme/123/apply" and jobs[0]["application"] is None
     assert client.get("/api/fill/jobs", headers=asha).status_code == 200
     assert client.get("/api/fill/jobs").status_code == 401
