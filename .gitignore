@@ -9,3 +9,4 @@ frontend/dist/
 backend/logs/
 data/
 .env
+dist/

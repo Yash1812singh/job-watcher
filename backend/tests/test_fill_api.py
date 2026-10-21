@@ -83,7 +83,8 @@ def test_resume_must_be_a_pdf_and_the_extension_download_points_here(client):
     asha = signup(client, "Asha Rao", "asha@example.com")
     assert client.put("/api/fill/resume", headers=asha, content=b"not a pdf").status_code == 422
     z = zipfile.ZipFile(io.BytesIO(client.get("/api/fill/extension.zip").content))
-    assert "fill-with-ai/manifest.json" in z.namelist()
+    assert "fill-with-ai/manifest.json" in z.namelist() and "fill-with-ai/connector.js" in z.namelist()
+    assert not [n for n in z.namelist() if n.endswith(".md")]
     assert b"http://testserver" in z.read("fill-with-ai/background.js")
 
 
@@ -155,3 +156,9 @@ def test_more_kinds_of_question(client):
     got = {a["id"]: a["value"] for a in decide(fields, profile=p, resume_name="")["answers"]}
     assert got == {"0": "1998-04-12", "1": "Indian", "2": "15 LPA", "3": "2 LPA", "4": "3", "5": "Female",
                    "6": "I prefer not to say", "7": "Ravi K"}
+
+
+def test_config_says_where_the_store_listing_is(client, monkeypatch):
+    assert client.get("/api/fill/config").json() == {"store_url": ""}
+    monkeypatch.setenv("FILL_EXTENSION_STORE_URL", "https://chromewebstore.google.com/detail/fill-with-ai/abc")
+    assert client.get("/api/fill/config").json()["store_url"].endswith("/abc")

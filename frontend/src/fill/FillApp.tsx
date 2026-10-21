@@ -185,12 +185,36 @@ function ResumeBox({ resume, onUploaded }: { resume: ProfileResponse["resume"]; 
   );
 }
 
+/* ── the browser extension ──────────────────────────────────────────────── */
+
+interface ExtState { checked: boolean; installed: boolean; version: string; email: string | null }
+
+/** Talks to the extension's connector on this page: is it installed, and whose account is it using? */
+function useExtension(): [ExtState, (key: string) => void] {
+  const [ext, setExt] = useState<ExtState>({ checked: false, installed: false, version: "", email: null });
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.source !== window || e.origin !== location.origin || e.data?.source !== "fwai-ext" || e.data.type !== "status") return;
+      setExt({ checked: true, installed: true, version: e.data.version, email: e.data.email });
+    };
+    window.addEventListener("message", onMsg);
+    const hello = () => window.postMessage({ source: "fwai-page", type: "hello" }, location.origin);
+    hello();
+    const timers = [setTimeout(hello, 800), setTimeout(hello, 2000), setTimeout(() => setExt((x) => ({ ...x, checked: true })), 3000)];
+    const poll = setInterval(hello, 5000); // notices an install made while the page is open
+    return () => { window.removeEventListener("message", onMsg); timers.forEach(clearTimeout); clearInterval(poll); };
+  }, []);
+  const connect = useCallback((key: string) => window.postMessage({ source: "fwai-page", type: "connect", key }, location.origin), []);
+  return [ext, connect];
+}
+
 /* ── tabs ───────────────────────────────────────────────────────────────── */
 
 type Tab = "jobs" | "applications" | "profile" | "extension";
 const TABS: [Tab, string][] = [["jobs", "Jobs"], ["applications", "My applications"], ["profile", "Profile"], ["extension", "Extension"]];
 
-function JobsTab({ hasKey, profilePct, go }: { hasKey: boolean; profilePct: number; go: (t: Tab) => void }) {
+function JobsTab({ ext, profilePct, go }: { ext: ExtState; profilePct: number; go: (t: Tab) => void }) {
+  const hasKey = !ext.checked || !!ext.email;
   const [q, setQ] = useState("");
   const [india, setIndia] = useState(true);
   const [tech, setTech] = useState(true);
@@ -228,7 +252,8 @@ function JobsTab({ hasKey, profilePct, go }: { hasKey: boolean; profilePct: numb
     <div className="f-tab">
       {!hasKey && (
         <div className="f-banner warn">
-          <b>Set up the extension first.</b> It's what fills the forms. <button className="f-link" onClick={() => go("extension")}>Show me how →</button>
+          <b>{ext.installed ? "Connecting the extension…" : "Add the extension first."}</b> It's what fills the forms.{" "}
+          {!ext.installed && <button className="f-link" onClick={() => go("extension")}>Add it →</button>}
         </div>
       )}
       {hasKey && profilePct < 70 && (
@@ -312,16 +337,15 @@ function ApplicationsTab({ go }: { go: (t: Tab) => void }) {
   );
 }
 
-function ExtensionSetup({ onKeys }: { onKeys: (n: number) => void }) {
+function ExtensionSetup({ ext, user, storeUrl }: { ext: ExtState; user: User; storeUrl: string }) {
   const [keys, setKeys] = useState<Key[]>([]);
   const [fresh, setFresh] = useState("");
   const [copied, setCopied] = useState(false);
-  useEffect(() => { api<Key[]>("/keys").then((k) => { setKeys(k); onKeys(k.length); }).catch(() => {}); }, [onKeys]);
+  useEffect(() => { api<Key[]>("/keys").then(setKeys).catch(() => {}); }, [ext.email]);
   const create = async () => {
-    const r = await api<{ key: string; keys: Key[] }>("/keys", { method: "POST", body: JSON.stringify({ label: navigator.userAgent.includes("Mac") ? "Chrome on Mac" : "Chrome" }) });
+    const r = await api<{ key: string; keys: Key[] }>("/keys", { method: "POST", body: JSON.stringify({ label: "Created by hand" }) });
     setFresh(r.key);
     setKeys(r.keys);
-    onKeys(r.keys.length);
     setCopied(false);
   };
   const copy = async () => {
@@ -334,50 +358,77 @@ function ExtensionSetup({ onKeys }: { onKeys: (n: number) => void }) {
   };
   const revoke = async (id: string) => {
     await api(`/keys/${id}`, { method: "DELETE" });
-    const left = keys.filter((k) => k.id !== id);
-    setKeys(left);
-    onKeys(left.length);
+    setKeys(keys.filter((k) => k.id !== id));
   };
+  const connected = ext.installed && ext.email === user.email;
   return (
-    <section className="f-card">
-      <h2>Set up the extension</h2>
-      <p className="f-muted">One time, about two minutes. It's what fills the forms on job sites.</p>
-      <ol className="f-steps">
-        <li>
-          <b>Download it</b>
-          <p><a className="f-button" href="/api/fill/extension.zip">Download fill-with-ai.zip</a> and unzip it.</p>
-        </li>
-        <li>
-          <b>Add it to Chrome</b>
-          <p>Open <code>chrome://extensions</code>, turn on <b>Developer mode</b> (top right), click <b>Load unpacked</b> and pick the unzipped <code>fill-with-ai</code> folder. Pin it to the toolbar.</p>
-        </li>
-        <li>
-          <b>Connect it to your profile</b>
-          <p>Create a key, then right-click the extension icon → <b>Options</b>, paste it and click <b>Save and test</b>.</p>
-          {fresh ? (
-            <div className="f-key">
-              <code>{fresh}</code>
-              <button type="button" onClick={copy}>{copied ? "Copied ✓" : "Copy"}</button>
-              <small>Shown once. Anyone with this key can fill forms with your details, so keep it to yourself.</small>
+    <div className="f-tab">
+      <section className={`f-card f-ext ${connected ? "ok" : ""}`}>
+        {connected ? (
+          <>
+            <div className="f-ext-icon">✓</div>
+            <div>
+              <h2>The extension is connected</h2>
+              <p className="f-muted">It fills forms as <b>{user.email}</b>. Pick a job in <b>Jobs</b> and click <b>Apply with AI</b>; nothing else to set up.</p>
             </div>
-          ) : <button type="button" className="f-primary" onClick={create}>Create extension key</button>}
-          {keys.length > 0 && (
-            <ul className="f-keys">
-              {keys.map((k) => (
-                <li key={k.id}>
-                  <span>{k.label} · created {new Date(k.created_at).toLocaleDateString()}{k.last_used_at ? ` · last used ${new Date(k.last_used_at).toLocaleDateString()}` : " · not used yet"}</span>
-                  <button type="button" className="f-link-danger" onClick={() => revoke(k.id)}>Revoke</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </li>
-        <li>
-          <b>Apply</b>
-          <p>In <b>Jobs</b>, click <b>Apply with AI</b>. The application opens with a panel at the top that fills it. When it lists something for you (a CAPTCHA, signing in, a question only you can answer), do it and the panel carries on. Click <b>Continue</b> between pages; press Submit yourself at the end. On any other job site, click the extension icon (or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>).</p>
-        </li>
-      </ol>
-    </section>
+          </>
+        ) : ext.installed ? (
+          <>
+            <div className="f-ext-icon">⟳</div>
+            <div><h2>Connecting…</h2><p className="f-muted">The extension is installed; it's linking to your account.</p></div>
+          </>
+        ) : (
+          <>
+            <div className="f-ext-icon">✦</div>
+            <div>
+              <h2>Add Fill with AI to Chrome</h2>
+              {storeUrl ? (
+                <>
+                  <p className="f-muted">One click. It connects to your account by itself; there's nothing to set up.</p>
+                  <a className="f-button big" href={storeUrl} target="_blank" rel="noreferrer">Add to Chrome</a>
+                </>
+              ) : (
+                <>
+                  <p className="f-muted">It connects to your account by itself once it's in Chrome. Until it's on the Chrome Web Store, adding it takes two steps:</p>
+                  <ol className="f-steps">
+                    <li><a className="f-button" href="/api/fill/extension.zip">Download the extension</a> and unzip it.</li>
+                    <li>Open <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b> and pick the <code>fill-with-ai</code> folder.</li>
+                  </ol>
+                </>
+              )}
+              <p className="f-muted small">{ext.checked ? "Not installed in this browser yet. This page notices as soon as it is." : "Checking…"}</p>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="f-card">
+        <h2>How it works</h2>
+        <p className="f-muted">In <b>Jobs</b>, click <b>Apply with AI</b>. The application opens with a panel at the top that fills it. When it lists something for you (a CAPTCHA, signing in, a question only you can answer), do it and the panel carries on. Click <b>Continue</b> between pages and press Submit yourself at the end. On any other job site, click the extension icon (or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>).</p>
+      </section>
+
+      <details className="f-card f-advanced">
+        <summary>Advanced: extension keys</summary>
+        <p className="f-muted small">The extension gets a key automatically. Create one by hand only for a browser that can't open this page (paste it in the extension's Options).</p>
+        {fresh ? (
+          <div className="f-key">
+            <code>{fresh}</code>
+            <button type="button" onClick={copy}>{copied ? "Copied ✓" : "Copy"}</button>
+            <small>Shown once. Anyone with this key can fill forms with your details.</small>
+          </div>
+        ) : <button type="button" onClick={create}>Create a key</button>}
+        {keys.length > 0 && (
+          <ul className="f-keys">
+            {keys.map((k) => (
+              <li key={k.id}>
+                <span>{k.label} · created {new Date(k.created_at).toLocaleDateString()}{k.last_used_at ? ` · last used ${new Date(k.last_used_at).toLocaleDateString()}` : " · not used yet"}</span>
+                <button type="button" className="f-link-danger" onClick={() => revoke(k.id)}>Revoke</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
+    </div>
   );
 }
 
@@ -546,7 +597,9 @@ function Home({ user, onOut }: { user: User; onOut: () => void }) {
   const [tab, setTabState] = useState<Tab>(() => (TABS.find(([t]) => location.hash === `#${t}`)?.[0] ?? "jobs"));
   const [saved, setSaved] = useState<ProfileResponse | null>(null);
   const [d, setDState] = useState<ProfileData>({});
-  const [keys, setKeys] = useState<number | null>(null);
+  const [ext, connectExt] = useExtension();
+  const [storeUrl, setStoreUrl] = useState("");
+  const connecting = useRef(false);
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -565,8 +618,18 @@ function Home({ user, onOut }: { user: User; onOut: () => void }) {
       setDState(p.data);
       if (!location.hash && completeness(p.data, !!p.resume).pct < 40) setTabState("profile"); // new users start with the profile
     }).catch((e) => e instanceof ApiError && e.status === 401 && onOut());
-    api<Key[]>("/keys").then((k) => setKeys(k.length)).catch(() => setKeys(0));
+    fetch("/api/fill/config").then((r) => r.json()).then((c) => setStoreUrl(c.store_url || "")).catch(() => {});
   }, [onOut]);
+
+  // The extension is in this browser but not linked to this account: link it, no copying or pasting.
+  useEffect(() => {
+    if (!ext.installed || ext.email === user.email || connecting.current) return;
+    connecting.current = true;
+    api<{ key: string }>("/keys", { method: "POST", body: JSON.stringify({ label: "Chrome (connected automatically)" }) })
+      .then((r) => connectExt(r.key))
+      .catch(() => {})
+      .finally(() => setTimeout(() => { connecting.current = false; }, 4000));
+  }, [ext.installed, ext.email, user.email, connectExt]);
 
   const dirty = useMemo(() => saved !== null && JSON.stringify(d) !== JSON.stringify(saved.data), [d, saved]);
   useEffect(() => {
@@ -613,9 +676,9 @@ function Home({ user, onOut }: { user: User; onOut: () => void }) {
         <div className="f-top-right"><span className="f-muted">{user.email}</span><button onClick={logout}>Log out</button></div>
       </header>
 
-      {tab === "jobs" && <div className="f-page"><JobsTab hasKey={(keys ?? 1) > 0} profilePct={done.pct} go={go} /></div>}
+      {tab === "jobs" && <div className="f-page"><JobsTab ext={ext} profilePct={done.pct} go={go} /></div>}
       {tab === "applications" && <div className="f-page"><ApplicationsTab go={go} /></div>}
-      {tab === "extension" && <div className="f-page"><ExtensionSetup onKeys={setKeys} /></div>}
+      {tab === "extension" && <div className="f-page"><ExtensionSetup ext={ext} user={user} storeUrl={storeUrl} /></div>}
       {tab === "profile" && (
         <>
           <ProfileForm d={d} setD={setD} saved={saved} setSaved={setSaved} pct={done.pct} missing={done.missing} />

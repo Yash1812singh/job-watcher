@@ -27,10 +27,28 @@ async function start(tabId, auto) {
 
 const autoKey = (tabId) => `auto:${tabId}`;
 
+// The Fill with AI website this extension belongs to: the default one, or the one set in Options.
+async function siteOrigins() {
+  const { server } = await chrome.storage.sync.get({ server: DEFAULT_SERVER });
+  return new Set([new URL(DEFAULT_SERVER).origin, new URL(server).origin]);
+}
+
+// Installed: open the website, which connects the extension to the user's account by itself.
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason !== "install") return;
+  const { server } = await chrome.storage.sync.get({ server: DEFAULT_SERVER });
+  chrome.tabs.create({ url: `${server.replace(/\/+$/, "")}/fill/#extension` });
+});
+
 chrome.action.onClicked.addListener((tab) => start(tab.id, null));
 
 chrome.tabs.onUpdated.addListener(async (tabId, change, tab) => {
   if (change.status !== "complete" || !tab.url || !/^https?:/.test(tab.url)) return;
+  const url = new URL(tab.url);
+  if (url.pathname.startsWith("/fill") && (await siteOrigins()).has(url.origin)) {
+    chrome.scripting.executeScript({ target: { tabId }, files: ["connector.js"] }).catch(() => {});
+    return;
+  }
   const m = tab.url.match(/#fill-with-ai(?:=(\d+))?/);
   let auto = (await chrome.storage.session.get(autoKey(tabId)))[autoKey(tabId)];
   if (m) {
@@ -63,6 +81,15 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       } else if (msg.type === "report") {
         if (s.key) await fetch(`${s.base}/api/fill/applications`, { method: "POST", headers: { ...s.headers, "Content-Type": "application/json" }, body: JSON.stringify(msg.payload) });
         reply({ ok: true });
+      } else if (msg.type === "connect" || msg.type === "whoami") {
+        // only the Fill with AI website itself may connect the extension (never another site)
+        const origin = sender.origin || (sender.tab?.url && new URL(sender.tab.url).origin);
+        if (!(await siteOrigins()).has(origin)) throw new Error("not the Fill with AI website");
+        if (msg.type === "connect") await chrome.storage.sync.set({ server: origin, key: msg.key });
+        const { key, server: stored } = await chrome.storage.sync.get({ key: "", server: DEFAULT_SERVER });
+        if (!key || new URL(stored).origin !== origin) return reply({ ok: true, email: null });
+        const r = await fetch(`${origin}/api/fill/status`, { headers: { Authorization: `Bearer ${key}` } });
+        reply({ ok: true, email: r.ok ? (await r.json()).user.email : null });
       } else if (msg.type === "stop") {
         await chrome.storage.session.remove(autoKey(sender.tab.id));
         reply({ ok: true });

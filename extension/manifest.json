@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Fill with AI (Job Watcher)",
-  "version": "2.0.0",
-  "description": "Opens with a panel on job applications you start from Fill with AI and fills them from your profile. You review and submit.",
+  "name": "Fill with AI",
+  "version": "2.1.0",
+  "description": "Fills job applications from your Fill with AI profile, with AI for open questions. You review and submit.",
   "action": {
     "default_title": "Fill this page with AI (Alt+Shift+F)"
   },

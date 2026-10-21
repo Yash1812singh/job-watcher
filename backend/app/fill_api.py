@@ -190,6 +190,12 @@ def delete_key(key_id: str, user: dict = Depends(current_user)) -> Response:
     return Response(status_code=204)
 
 
+@router.get("/config")
+def config() -> dict:
+    """Public settings for the website: the Chrome Web Store page, once the extension is published there."""
+    return {"store_url": os.environ.get("FILL_EXTENSION_STORE_URL", "")}
+
+
 @router.get("/extension.zip")
 def extension_zip(request: Request) -> Response:
     """The extension, set up to talk to this site."""
@@ -199,7 +205,7 @@ def extension_zip(request: Request) -> Response:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for f in sorted(EXTENSION_DIR.iterdir()):
-            if f.is_file() and not f.name.startswith("."):
+            if f.is_file() and not f.name.startswith(".") and f.suffix != ".md":  # not the docs
                 data = f.read_bytes()
                 if f.name in ("background.js", "options.js"):
                     data = data.replace(b"https://job-watcher-w5jm.onrender.com", site.encode())

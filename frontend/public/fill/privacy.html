@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fill with AI · Privacy</title>
+<style>
+  :root { --bg:#f3f4f1; --fg:#1d211c; --muted:#687064; --line:#e1e4dc; --accent:#2f6b3a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141713; --fg:#e6e9e3; --muted:#9aa294; --line:#2c3229; --accent:#7fc28a; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:40px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:18px; margin:28px 0 6px; }
+  p, li { color:var(--fg); } .muted { color:var(--muted); } a { color:var(--accent); }
+</style></head>
+<body><main>
+<h1>Fill with AI: privacy</h1>
+<p class="muted">Applies to the Fill with AI website and its Chrome extension.</p>
+
+<h2>What we store</h2>
+<p>What you enter in your profile (contact details, work history, education, answers you save), the resume you upload,
+your account email and a hashed password, and the jobs you open with Fill with AI and whether you submitted them.</p>
+
+<h2>What the extension does</h2>
+<ul>
+  <li>On a job application page, when you start it, it reads the form's fields (their labels and options) and sends them, with some of the page's text, to the Fill with AI server, which replies with what to fill in from your profile.</li>
+  <li>It fills those fields and attaches your resume (and a cover letter) on that page.</li>
+  <li>It never clicks Submit. It doesn't read pages you didn't start it on, your browsing history, passwords or payment details.</li>
+  <li>On the Fill with AI website, it receives your extension key so it can act for your account.</li>
+</ul>
+
+<h2>AI</h2>
+<p>To answer open questions and write cover letters, the relevant question, some text from the job page and the
+details from your profile are sent to Groq's AI service. They aren't used to identify you beyond that request.</p>
+
+<h2>Sharing</h2>
+<p>We don't sell or share your data. The employers whose forms you submit receive what you submit to them.</p>
+
+<h2>Deleting</h2>
+<p>Profile → Delete account removes your profile, resume, applications and extension keys. Removing the extension from Chrome deletes its stored key.</p>
+</main></body></html>
