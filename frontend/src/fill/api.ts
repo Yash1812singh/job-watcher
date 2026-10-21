@@ -56,10 +56,15 @@ export interface ProfileData {
   personal?: Entry;
   work?: Entry;
   eligibility?: Entry;
+  eeo?: Entry;
+  sourcing?: Entry;
   summary?: string;
   skills?: string;
+  cover_letter?: string;
   education?: Entry[];
   history?: Entry[];
+  languages?: Entry[];
+  certifications?: Entry[];
   answers?: { question: string; answer: string }[];
 }
 
@@ -71,3 +76,27 @@ export interface ProfileResponse {
 }
 
 export interface Key { id: string; label: string; created_at: string; last_used_at: string | null }
+
+export interface Job {
+  id: number;
+  title: string;
+  url: string;
+  apply_url: string;
+  location: string | null;
+  department: string | null;
+  fresh_at: string;
+  tech_category: string | null;
+  company: string;
+  application: "opened" | "submitted" | null;
+}
+
+export interface Application {
+  id: number;
+  job_id: number | null;
+  url: string;
+  title: string;
+  company: string;
+  status: "opened" | "submitted";
+  created_at: string;
+  updated_at: string;
+}

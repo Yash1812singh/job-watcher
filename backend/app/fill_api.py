@@ -14,10 +14,15 @@ import re
 from collections import defaultdict, deque
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from datetime import datetime, timedelta, timezone
+from typing import Literal
+from urllib.parse import parse_qsl, urlparse
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from . import accounts, autofill
+from . import accounts, autofill, db
+from .scraper import detect_ats
 
 router = APIRouter(prefix="/api/fill", tags=["fill with ai"])
 EXTENSION_DIR = Path(os.environ.get("JOB_WATCHER_EXTENSION_DIR", Path(__file__).resolve().parents[2] / "extension"))
@@ -216,6 +221,7 @@ class Field_(BaseModel):
 class DecideRequest(BaseModel):
     url: str = ""
     job: str = ""
+    job_id: int | None = None   # set when the form was opened from the Jobs list
     page_text: str = ""
     fields: list[Field_] = Field(max_length=400)
 
@@ -233,10 +239,77 @@ def status(user: dict = Depends(extension_user)) -> dict:
 def decide(body: DecideRequest, user: dict = Depends(extension_user)) -> dict:
     stored = accounts.get_profile(user["id"])
     profile = autofill.profile_from_dict(stored["data"])
+    info = accounts.job_info(body.job_id) if body.job_id else None
+    if body.job_id:
+        accounts.record_application(user["id"], body.job_id, "opened")
     return autofill.decide([f.model_dump() for f in body.fields], body.job, body.page_text, profile,
-                           resume_name=(stored["resume"] or {}).get("name") or "")
+                           resume_name=(stored["resume"] or {}).get("name") or "",
+                           role=(info or {}).get("title", ""), company=(info or {}).get("company", ""))
 
 
 @router.get("/resume-file")
 def resume_for_extension(user: dict = Depends(extension_user)) -> Response:
     return _resume_response(user["id"])
+
+
+# ── Jobs and applications ────────────────────────────────────────────────────
+
+@router.get("/jobs")
+def jobs(q: str = "", india: bool = True, tech: bool = True, within_hours: int = Query(72, ge=1, le=24 * 60),
+         limit: int = Query(100, ge=1, le=500), user: dict = Depends(current_user)) -> list[dict]:
+    """Open jobs Job Watcher found, newest first, with this user's application status."""
+    where = ["j.is_active = 1", "j.fresh_at >= ?"]
+    params: list = [db.to_iso(datetime.now(timezone.utc) - timedelta(hours=within_hours))]
+    if india:
+        where.append("j.is_india = 1")
+    if tech:
+        where.append("j.is_tech = 1")
+    if q.strip():
+        where.append("(j.title LIKE ? OR s.name LIKE ? OR j.location LIKE ?)")
+        params += [f"%{q.strip()}%"] * 3
+    sql = f"""SELECT j.id, j.title, j.url, j.location, j.department, j.fresh_at, j.tech_category, s.name AS company,
+                     s.url AS site_url, a.status AS application
+              FROM jobs j JOIN sites s ON s.id = j.site_id
+              LEFT JOIN fill_applications a ON a.job_id = j.id AND a.user_id = ?
+              WHERE {' AND '.join(where)} ORDER BY j.fresh_at DESC, j.id DESC LIMIT ?"""
+    with db.connect() as conn:
+        rows = [dict(r) for r in conn.execute(sql, (user["id"], *params, limit))]
+    for r in rows:
+        r["apply_url"] = application_url(r["url"], r.pop("site_url") or "")
+    return rows
+
+
+@router.get("/applications")
+def list_applications(user: dict = Depends(current_user)) -> list[dict]:
+    return accounts.applications(user["id"])
+
+
+class ApplicationReport(BaseModel):
+    job_id: int | None = None
+    url: str = Field(default="", max_length=2000)
+    title: str = Field(default="", max_length=300)
+    status: Literal["opened", "submitted"]
+
+
+@router.post("/applications", status_code=204, response_class=Response)
+def report_application(body: ApplicationReport, user: dict = Depends(extension_user)) -> Response:
+    """The extension saw the form opened, or the confirmation page after the user submitted."""
+    accounts.record_application(user["id"], body.job_id, body.status, body.url, body.title)
+    return Response(status_code=204)
+
+
+def application_url(job_url: str, site_url: str = "") -> str:
+    """The page with the application form for a posting (Lever /apply, Ashby /application,
+    Greenhouse's hosted form for jobs shown on a company's own site)."""
+    u = urlparse(job_url)
+    host = u.netloc.lower()
+    if "lever.co" in host and not u.path.rstrip("/").endswith("/apply"):
+        return job_url.rstrip("/") + "/apply"
+    if "ashbyhq.com" in host and not u.path.rstrip("/").endswith("/application"):
+        return job_url.rstrip("/") + "/application"
+    gh_id = dict(parse_qsl(u.query)).get("gh_jid")
+    if gh_id and "greenhouse.io" not in host:
+        ats = detect_ats(site_url) or detect_ats(job_url)
+        if ats and ats[0] == "greenhouse":
+            return f"https://job-boards.greenhouse.io/{ats[1]}/jobs/{gh_id}"
+    return job_url

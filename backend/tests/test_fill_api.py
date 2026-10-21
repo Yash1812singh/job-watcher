@@ -90,3 +90,59 @@ def test_logins_are_rate_limited(client):
     for _ in range(10):
         client.post("/api/fill/login", json={"email": "x@example.com", "password": "nope"})
     assert client.post("/api/fill/login", json={"email": "x@example.com", "password": "nope"}).status_code == 429
+
+
+def _add_job(title="Backend Engineer", url="https://jobs.lever.co/acme/123", india=1, tech=1):
+    with db.connect() as conn:
+        site = conn.execute("INSERT INTO sites (url, name, created_at) VALUES ('https://jobs.lever.co/acme', 'Acme', ?)",
+                            (db.now_iso(),)).lastrowid
+        return conn.execute("""INSERT INTO jobs (site_id, external_id, title, url, first_seen_at, last_seen_at, fresh_at, is_india, is_tech)
+                               VALUES (?, '123', ?, ?, ?, ?, ?, ?, ?)""",
+                            (site, title, url, db.now_iso(), db.now_iso(), db.now_iso(), india, tech)).lastrowid
+
+
+def test_jobs_list_and_applying_from_it(client):
+    asha = signup(client, "Asha Rao", "asha@example.com")
+    job = _add_job()
+    jobs = client.get("/api/fill/jobs", headers=asha).json()
+    assert [j["id"] for j in jobs] == [job]
+    assert jobs[0]["apply_url"] == "https://jobs.lever.co/acme/123/apply" and jobs[0]["application"] is None
+    assert client.get("/api/fill/jobs", headers=asha).status_code == 200
+    assert client.get("/api/fill/jobs").status_code == 401
+
+    # the panel fills the form opened from the list: recorded as opened, cover letter names the job
+    client.put("/api/fill/profile", headers=asha, json={"personal": {"first_name": "Asha", "last_name": "Rao"},
+                                                         "cover_letter": "I'd love to join {company} as {role}."})
+    key = {"Authorization": f"Bearer {client.post('/api/fill/keys', headers=asha, json={}).json()['key']}"}
+    out = client.post("/api/fill/decide", headers=key, json={"job_id": job, "fields": [
+        {"id": "1", "kind": "textarea", "label": "Cover letter", "required": True},
+        {"id": "2", "kind": "file", "label": "Cover Letter", "required": False}]}).json()
+    got = {a["id"]: a for a in out["answers"]}
+    assert got["1"]["value"] == "I'd love to join Acme as Backend Engineer."
+    assert got["2"]["value"] == "cover-letter.txt" and got["2"]["text"] == got["1"]["value"]
+    assert client.get("/api/fill/jobs", headers=asha).json()[0]["application"] == "opened"
+
+    # the extension saw the confirmation page
+    assert client.post("/api/fill/applications", headers=key, json={"job_id": job, "status": "submitted"}).status_code == 204
+    client.post("/api/fill/applications", headers=key, json={"job_id": job, "status": "opened"})   # reopening doesn't undo it
+    apps = client.get("/api/fill/applications", headers=asha).json()
+    assert [(a["title"], a["company"], a["status"]) for a in apps] == [("Backend Engineer", "Acme", "submitted")]
+
+    # other users don't see Asha's applications
+    ben = signup(client, "Ben Lee", "ben@example.com")
+    assert client.get("/api/fill/applications", headers=ben).json() == []
+    assert client.get("/api/fill/jobs", headers=ben).json()[0]["application"] is None
+
+
+def test_more_kinds_of_question(client):
+    from app.autofill import decide, profile_from_dict
+    p = profile_from_dict({"personal": {"first_name": "Asha", "dob": "1998-04-12", "nationality": "Indian"},
+                           "work": {"current_fixed": "15 LPA", "current_variable": "2 LPA", "relevant_years": "3"},
+                           "eeo": {"gender": "Female"}, "sourcing": {"referral_name": "Ravi K"}})
+    fields = [{"id": str(i), "kind": k, "label": l, "options": o, "required": True, "value": ""} for i, (k, l, o) in enumerate([
+        ("text", "Date of birth", []), ("text", "Nationality", []), ("text", "Fixed CTC", []), ("text", "Variable pay", []),
+        ("text", "Years of relevant experience in Python", []), ("select", "Gender", ["Male", "Female", "Prefer not to say"]),
+        ("select", "Are you a veteran?", ["Yes", "No", "I prefer not to say"]), ("text", "Referred by (employee name)", [])])]
+    got = {a["id"]: a["value"] for a in decide(fields, profile=p, resume_name="")["answers"]}
+    assert got == {"0": "1998-04-12", "1": "Indian", "2": "15 LPA", "3": "2 LPA", "4": "3", "5": "Female",
+                   "6": "I prefer not to say", "7": "Ravi K"}

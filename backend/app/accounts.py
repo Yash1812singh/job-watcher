@@ -36,6 +36,19 @@ CREATE TABLE IF NOT EXISTS fill_profiles (
     resume_updated_at TEXT,
     updated_at        TEXT NOT NULL
 );
+-- jobs a user opened with Fill with AI, and whether the extension saw them submitted
+CREATE TABLE IF NOT EXISTS fill_applications (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES fill_users(id) ON DELETE CASCADE,
+    job_id     INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+    url        TEXT NOT NULL,
+    title      TEXT NOT NULL DEFAULT '',
+    company    TEXT NOT NULL DEFAULT '',
+    status     TEXT NOT NULL,                -- opened | submitted
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (user_id, job_id)
+);
 """
 
 MAX_RESUME_BYTES = 5 * 1024 * 1024
@@ -122,6 +135,7 @@ def log_in(email: str, password: str) -> tuple[dict, str]:
 
 def delete_user(user_id: int) -> None:
     with db.connect() as conn:
+        conn.execute("DELETE FROM fill_applications WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM fill_tokens WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM fill_profiles WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM fill_users WHERE id = ?", (user_id,))
@@ -176,3 +190,40 @@ def drop_extension_key(user_id: int, key_id: str) -> bool:
         cur = conn.execute("DELETE FROM fill_tokens WHERE user_id = ? AND kind = 'extension' AND token_hash LIKE ?",
                            (user_id, key_id + "%"))
     return cur.rowcount > 0
+
+
+# ── Applications ─────────────────────────────────────────────────────────────
+
+def job_info(job_id: int) -> dict | None:
+    with db.connect() as conn:
+        row = conn.execute("""SELECT j.id, j.title, j.url, j.location, s.name AS company, s.url AS site_url
+                              FROM jobs j JOIN sites s ON s.id = j.site_id WHERE j.id = ?""", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def record_application(user_id: int, job_id: int | None, status: str, url: str = "", title: str = "", company: str = "") -> None:
+    """opened when the panel starts on a job's form; submitted when it sees the confirmation page.
+    Never goes back from submitted to opened."""
+    if job_id:
+        info = job_info(job_id)
+        if info:
+            url, title, company = url or info["url"], info["title"], info["company"]
+    if not url:
+        return
+    now = db.now_iso()
+    with db.connect() as conn:
+        existing = conn.execute("SELECT id, status FROM fill_applications WHERE user_id = ? AND "
+                                + ("job_id = ?" if job_id else "job_id IS NULL AND url = ?"), (user_id, job_id or url)).fetchone()
+        if existing:
+            if not (existing["status"] == "submitted" and status == "opened"):
+                conn.execute("UPDATE fill_applications SET status = ?, updated_at = ? WHERE id = ?", (status, now, existing["id"]))
+        else:
+            conn.execute("""INSERT INTO fill_applications (user_id, job_id, url, title, company, status, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (user_id, job_id, url, title, company, status, now, now))
+
+
+def applications(user_id: int) -> list[dict]:
+    with db.connect() as conn:
+        rows = conn.execute("""SELECT id, job_id, url, title, company, status, created_at, updated_at FROM fill_applications
+                               WHERE user_id = ? ORDER BY updated_at DESC LIMIT 500""", (user_id,)).fetchall()
+    return [dict(r) for r in rows]

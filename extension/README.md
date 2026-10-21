@@ -1,9 +1,11 @@
 # Fill with AI (Chrome extension, local only)
 
-Open a job application, click the extension (or press **Alt+Shift+F**): it fills the page from your
-profile, writes answers to open questions with AI, attaches your resume, and highlights in yellow
-whatever it couldn't fill. **It never clicks Next or Submit**: you check the page and do that. On a
-multi-page form, click it again on each page.
+Pick a job on the Fill with AI website (**Jobs → Apply with AI**): its application opens with a panel
+at the top that fills the form from your profile, attaches your resume and a cover letter, writes
+answers to open questions with AI, and lists anything only you can do (a CAPTCHA, signing in, a
+question it can't answer). Do those and it carries on by itself, including the next steps of
+multi-page forms; **Continue** moves to the next page. **It never clicks Submit**: you do. On any
+other job page, click the extension (or press **Alt+Shift+F**).
 
 ## Set up (once)
 
