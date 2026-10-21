@@ -208,6 +208,14 @@ function useExtension(): [ExtState, (key: string) => void] {
   return [ext, connect];
 }
 
+type Stores = { store_url: string; edge_url: string; firefox_url: string };
+type Browser = "chrome" | "edge" | "firefox" | "other";
+const BROWSER: Browser = /Edg\//.test(navigator.userAgent) ? "edge" : /Firefox\//.test(navigator.userAgent) ? "firefox"
+  : /Chrome\//.test(navigator.userAgent) ? "chrome" : "other";
+const STORE_NAMES: Record<keyof Stores, [string, string]> = {
+  store_url: ["Chrome", "Add to Chrome"], edge_url: ["Microsoft Edge", "Get it for Edge"], firefox_url: ["Firefox", "Add to Firefox"],
+};
+
 /* ── tabs ───────────────────────────────────────────────────────────────── */
 
 type Tab = "jobs" | "applications" | "profile" | "extension";
@@ -337,7 +345,10 @@ function ApplicationsTab({ go }: { go: (t: Tab) => void }) {
   );
 }
 
-function ExtensionSetup({ ext, user, storeUrl }: { ext: ExtState; user: User; storeUrl: string }) {
+function ExtensionSetup({ ext, user, stores }: { ext: ExtState; user: User; stores: Stores }) {
+  const mine: keyof Stores = BROWSER === "edge" ? "edge_url" : BROWSER === "firefox" ? "firefox_url" : "store_url";
+  const storeUrl = stores[mine];
+  const others = (Object.keys(STORE_NAMES) as (keyof Stores)[]).filter((k) => k !== mine && stores[k]);
   const [keys, setKeys] = useState<Key[]>([]);
   const [fresh, setFresh] = useState("");
   const [copied, setCopied] = useState(false);
@@ -381,20 +392,26 @@ function ExtensionSetup({ ext, user, storeUrl }: { ext: ExtState; user: User; st
           <>
             <div className="f-ext-icon">✦</div>
             <div>
-              <h2>Add Fill with AI to Chrome</h2>
+              <h2>Add Fill with AI to {BROWSER === "edge" ? "Edge" : BROWSER === "firefox" ? "Firefox" : "your browser"}</h2>
               {storeUrl ? (
                 <>
                   <p className="f-muted">One click. It connects to your account by itself; there's nothing to set up.</p>
-                  <a className="f-button big" href={storeUrl} target="_blank" rel="noreferrer">Add to Chrome</a>
+                  <a className="f-button big" href={storeUrl} target="_blank" rel="noreferrer">{STORE_NAMES[mine][1]}</a>
                 </>
+              ) : BROWSER === "firefox" ? (
+                <p className="f-muted">The Firefox version isn't published yet. Until it is, use Chrome or Edge.</p>
               ) : (
                 <>
-                  <p className="f-muted">It connects to your account by itself once it's in Chrome. Until it's on the Chrome Web Store, adding it takes two steps:</p>
+                  <p className="f-muted">It connects to your account by itself once it's added. Until it's on {BROWSER === "edge" ? "Edge Add-ons" : "the Chrome Web Store"}, adding it takes two steps:</p>
                   <ol className="f-steps">
                     <li><a className="f-button" href="/api/fill/extension.zip">Download the extension</a> and unzip it.</li>
-                    <li>Open <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b> and pick the <code>fill-with-ai</code> folder.</li>
+                    <li>Open <code>{BROWSER === "edge" ? "edge://extensions" : "chrome://extensions"}</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b> and pick the <code>fill-with-ai</code> folder.</li>
                   </ol>
                 </>
+              )}
+              {others.length > 0 && (
+                <p className="f-muted small">Also for {others.map((k, i) => (
+                  <span key={k}>{i ? ", " : ""}<a href={stores[k]} target="_blank" rel="noreferrer">{STORE_NAMES[k][0]}</a></span>))}.</p>
               )}
               <p className="f-muted small">{ext.checked ? "Not installed in this browser yet. This page notices as soon as it is." : "Checking…"}</p>
             </div>
@@ -598,7 +615,7 @@ function Home({ user, onOut }: { user: User; onOut: () => void }) {
   const [saved, setSaved] = useState<ProfileResponse | null>(null);
   const [d, setDState] = useState<ProfileData>({});
   const [ext, connectExt] = useExtension();
-  const [storeUrl, setStoreUrl] = useState("");
+  const [stores, setStores] = useState<Stores>({ store_url: "", edge_url: "", firefox_url: "" });
   const connecting = useRef(false);
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");
@@ -618,7 +635,7 @@ function Home({ user, onOut }: { user: User; onOut: () => void }) {
       setDState(p.data);
       if (!location.hash && completeness(p.data, !!p.resume).pct < 40) setTabState("profile"); // new users start with the profile
     }).catch((e) => e instanceof ApiError && e.status === 401 && onOut());
-    fetch("/api/fill/config").then((r) => r.json()).then((c) => setStoreUrl(c.store_url || "")).catch(() => {});
+    fetch("/api/fill/config").then((r) => r.json()).then((c: Stores) => setStores(c)).catch(() => {});
   }, [onOut]);
 
   // The extension is in this browser but not linked to this account: link it, no copying or pasting.
@@ -678,7 +695,7 @@ function Home({ user, onOut }: { user: User; onOut: () => void }) {
 
       {tab === "jobs" && <div className="f-page"><JobsTab ext={ext} profilePct={done.pct} go={go} /></div>}
       {tab === "applications" && <div className="f-page"><ApplicationsTab go={go} /></div>}
-      {tab === "extension" && <div className="f-page"><ExtensionSetup ext={ext} user={user} storeUrl={storeUrl} /></div>}
+      {tab === "extension" && <div className="f-page"><ExtensionSetup ext={ext} user={user} stores={stores} /></div>}
       {tab === "profile" && (
         <>
           <ProfileForm d={d} setD={setD} saved={saved} setSaved={setSaved} pct={done.pct} missing={done.missing} />

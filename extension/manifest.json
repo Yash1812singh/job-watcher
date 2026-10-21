@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Fill with AI",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Fills job applications from your Fill with AI profile, with AI for open questions. You review and submit.",
   "action": {
     "default_title": "Fill this page with AI (Alt+Shift+F)"
@@ -22,10 +22,25 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": [
+      "background.js"
+    ]
   },
   "options_page": "options.html",
   "icons": {
     "128": "icon128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "fill-with-ai@job-watcher",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": [
+          "personallyIdentifyingInfo",
+          "websiteContent"
+        ]
+      }
+    }
   }
 }

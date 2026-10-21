@@ -159,6 +159,6 @@ def test_more_kinds_of_question(client):
 
 
 def test_config_says_where_the_store_listing_is(client, monkeypatch):
-    assert client.get("/api/fill/config").json() == {"store_url": ""}
+    assert client.get("/api/fill/config").json() == {"store_url": "", "edge_url": "", "firefox_url": ""}
     monkeypatch.setenv("FILL_EXTENSION_STORE_URL", "https://chromewebstore.google.com/detail/fill-with-ai/abc")
     assert client.get("/api/fill/config").json()["store_url"].endswith("/abc")

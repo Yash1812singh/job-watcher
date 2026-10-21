@@ -74,11 +74,18 @@
     panel = {
       title(t) { $(".t").textContent = t; },
       status(t, tone = "") { const s = $(".status"); s.textContent = t; s.className = "status " + tone; },
-      busy(t) { const s = $(".status"); s.className = "status"; s.innerHTML = '<span class="spin">◌</span> '; s.append(t); },
+      busy(t) {
+        const s = $(".status");
+        const spin = document.createElement("span");
+        spin.className = "spin";
+        spin.textContent = "◌";
+        s.className = "status";
+        s.replaceChildren(spin, " " + t);
+      },
       needs(items, note) {
         const box = $(".needs");
         box.hidden = !items.length && !note;
-        box.innerHTML = "";
+        box.replaceChildren();
         if (items.length) {
           const h = document.createElement("div");
           h.className = "h";
@@ -87,8 +94,12 @@
           items.forEach((it, i) => {
             const b = document.createElement("button");
             b.className = "item";
-            b.innerHTML = `<span class="n">${i + 1}.</span><span></span>`;
-            b.lastChild.textContent = it.text;
+            const n = document.createElement("span");
+            n.className = "n";
+            n.textContent = `${i + 1}.`;
+            const t = document.createElement("span");
+            t.textContent = it.text;
+            b.append(n, t);
             b.onclick = () => it.el && focusField(it.el);
             box.append(b);
           });

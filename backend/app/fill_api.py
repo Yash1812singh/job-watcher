@@ -192,8 +192,11 @@ def delete_key(key_id: str, user: dict = Depends(current_user)) -> Response:
 
 @router.get("/config")
 def config() -> dict:
-    """Public settings for the website: the Chrome Web Store page, once the extension is published there."""
-    return {"store_url": os.environ.get("FILL_EXTENSION_STORE_URL", "")}
+    """Public settings for the website: the extension's store pages, once it's published there.
+    Edge Add-ons and Firefox Add-ons are free to publish on; the Chrome Web Store has a one-time fee."""
+    return {"store_url": os.environ.get("FILL_EXTENSION_STORE_URL", ""),       # Chrome Web Store
+            "edge_url": os.environ.get("FILL_EXTENSION_EDGE_URL", ""),         # Microsoft Edge Add-ons
+            "firefox_url": os.environ.get("FILL_EXTENSION_FIREFOX_URL", "")}   # Firefox Add-ons
 
 
 @router.get("/extension.zip")

@@ -1,20 +1,44 @@
-# Chrome Web Store listing: Fill with AI
+# Publishing Fill with AI (one-click install)
 
-Publishing gives everyone a one-click **Add to Chrome** button; the extension then connects to their
-account by itself the first time they open the Fill with AI website.
+Once it's in a store, people get a one-click install button and the extension connects to their
+account by itself the first time they open the Fill with AI website. The same package works for all three:
 
-## Publish (once)
+```bash
+./scripts/package-extension.sh      # → dist/fill-with-ai-<version>.zip
+```
 
-1. Build the package: `./scripts/package-extension.sh` → `dist/fill-with-ai-<version>.zip`.
-2. Create a developer account at https://chrome.google.com/webstore/devconsole (Google account, one-time $5 fee).
-3. **New item** → upload the zip.
-4. Fill in the listing from this file (below), add at least one 1280×800 screenshot of the panel on an
-   application form, and set the privacy policy URL to `https://job-watcher-w5jm.onrender.com/fill/privacy.html`.
-5. Submit for review (usually a few days). Once it's published, copy its store URL and set
-   `FILL_EXTENSION_STORE_URL` to it in Render → job-watcher → Environment. The website then shows
-   **Add to Chrome** instead of the download steps.
+| Store | Cost | Who it's for |
+|---|---|---|
+| Microsoft Edge Add-ons | **free** | Edge users |
+| Firefox Add-ons | **free** | Firefox users |
+| Chrome Web Store | $5 one-time | Chrome users (Chrome only installs extensions from its own store) |
 
-For updates, bump `version` in `manifest.json`, re-run the script and upload the new zip.
+Each store asks for the listing text below, a 1280×800 screenshot of the panel on an application form,
+and the privacy policy URL: `https://job-watcher-w5jm.onrender.com/fill/privacy.html`.
+
+## Microsoft Edge Add-ons (free)
+
+1. Register at https://partner.microsoft.com/dashboard/microsoftedge (Microsoft account; individual
+   developer registration is free).
+2. **Create new extension** → upload the zip → fill in the listing → **Publish**. Review usually takes a few days.
+3. When it's live, set `FILL_EXTENSION_EDGE_URL` to its store page in Render → job-watcher → Environment.
+   Edge users then get **Get it for Edge** on the website.
+
+## Firefox Add-ons (free)
+
+1. Sign in at https://addons.mozilla.org/developers/ (free Mozilla account).
+2. **Submit a New Add-on** → "On this site" → upload the same zip. The listing asks the same questions;
+   the data it uses is declared in the manifest (personal information and page content, used only to fill your forms).
+3. When it's approved, set `FILL_EXTENSION_FIREFOX_URL` to its page on addons.mozilla.org.
+
+## Chrome Web Store ($5 one-time)
+
+1. Create a developer account at https://chrome.google.com/webstore/devconsole.
+2. **New item** → upload the zip → listing → submit for review.
+3. When it's live, set `FILL_EXTENSION_STORE_URL` to its store page.
+
+Until a store has it, the website offers the download (unzip, then "Load unpacked" in Chrome or Edge).
+For updates, bump `version` in `manifest.json`, re-run the script and upload the new zip to each store.
 
 ## Listing
 
