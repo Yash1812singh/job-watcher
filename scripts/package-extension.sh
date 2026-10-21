@@ -6,5 +6,5 @@ VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$ROOT/extension/manifest.
 OUT="$ROOT/dist/fill-with-ai-$VERSION.zip"
 mkdir -p "$ROOT/dist"
 rm -f "$OUT"
-(cd "$ROOT/extension" && zip -q -X "$OUT" manifest.json background.js content.js connector.js options.html options.js icon128.png)
+(cd "$ROOT/extension" && zip -q -X "$OUT" manifest.json background.js content.js connector.js options.html options.js icon16.png icon48.png icon128.png)
 echo "$OUT ($(du -h "$OUT" | cut -f1))"

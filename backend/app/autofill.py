@@ -320,6 +320,10 @@ RULES: list[tuple[re.Pattern, object]] = [(re.compile(p, re.I), a) for p, a in [
     (r"skills|tech(nical)?\s*stack|technologies", lambda p: ", ".join(p.skills[:20]) or OPEN),
 ]]
 
+# codes the user receives (by email, SMS, invite…) that no profile can know
+ONLY_YOU = re.compile(r"\b(code|otp|one[-\s]*time\s*password|verification|captcha|security\s*question|token)\b", re.I)
+NOT_A_SECRET = re.compile(r"zip|postal|pin\s*code|post\s*code|area\s*code|country\s*code|dial(ling)?\s*code|isd", re.I)
+
 OPEN_QUESTION = re.compile(r"\?|\bwhy\b|\bwhat\b|\bhow\b|describe|tell us|explain|share|cover\s*letter|anything else|additional|about\s*(you|yourself)", re.I)
 COVER = re.compile(r"cover\s*letter|motivation\s*letter", re.I)
 
@@ -330,6 +334,8 @@ def rule_answer(label: str, p: Profile):
     for key, ans in p.custom_answers.items():
         if key and key.lower() in label.lower():
             return ans
+    if ONLY_YOU.search(label) and not NOT_A_SECRET.search(label):
+        return ""  # a code from an email/SMS, an OTP…: only the user has it (never their email address)
     for pattern, ans in RULES:
         if pattern.search(label):
             return ans(p) if callable(ans) else ans

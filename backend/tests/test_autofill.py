@@ -98,3 +98,18 @@ def test_a_base64_resume_is_served_decoded(tmp_path, monkeypatch):
     monkeypatch.setattr(autofill, "RESUME_PATH", path)
     r = TestClient(main.app).get("/api/autofill/resume")
     assert r.status_code == 200 and r.content == pdf and 'filename="resume.pdf"' in r.headers["content-disposition"]
+
+
+def test_codes_only_the_user_has_are_left_for_them(profile):
+    fields = _fields(
+        {"kind": "text", "label": "Enter the referral code from your invite email"},
+        {"kind": "text", "label": "Verification code sent to your phone"},
+        {"kind": "text", "label": "OTP"},
+        {"kind": "text", "label": "PIN code"},
+        {"kind": "text", "label": "Email"},
+    )
+    out = autofill.decide(fields, "", "", profile)
+    got = {a["id"]: a["value"] for a in out["answers"]}
+    assert got == {"4": "asha@example.com"}   # PIN code (postal) is simply empty in this profile
+    assert out["missing"][:3] == ["Enter the referral code from your invite email", "Verification code sent to your phone", "OTP"]
+    assert profile.asked == []                 # and the AI isn't asked to make one up
