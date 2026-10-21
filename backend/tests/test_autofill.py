@@ -87,6 +87,8 @@ def test_pick_option_understands_yes_no_and_declines():
     assert autofill.pick_option("Pune", ["Select…", "Mumbai", "Pune"]) == "Pune"
     assert autofill.pick_option("Bengaluru", ["Mumbai", "Pune"]) is None
     assert autofill.pick_option("Bangalore, Karnataka", ["Mumbai", "Bengaluru, Karnataka"]) == "Bengaluru, Karnataka"
+    assert autofill.pick_option("India", ["British Indian Ocean Territory", "India +91", "Indonesia"]) == "India +91"
+    assert autofill.pick_option("India", ["British Indian Ocean Territory", "Republic of India"]) == "Republic of India"
 
 
 def test_dropdown_without_the_profiles_exact_words_goes_to_ai(monkeypatch):
@@ -124,3 +126,24 @@ def test_codes_only_the_user_has_are_left_for_them(profile):
     assert got == {"4": "asha@example.com"}   # PIN code (postal) is simply empty in this profile
     assert out["missing"][:3] == ["Enter the referral code from your invite email", "Verification code sent to your phone", "OTP"]
     assert profile.asked == []                 # and the AI isn't asked to make one up
+
+
+def test_declined_personal_questions_never_get_another_answer(monkeypatch):
+    monkeypatch.setattr(autofill, "ai_answer", lambda *a, **k: "Others")
+    profile = autofill.Profile(first_name="Asha", gender="Prefer not to say", current_title="Software Engineer", notice_period="30 days")
+    fields = [{"id": "g", "kind": "select", "label": "Gender", "options": ["Male", "Female", "Others"], "required": True},
+              {"id": "g2", "kind": "select", "label": "Gender", "options": ["Male", "Female", "I don't wish to answer"], "required": True},
+              {"id": "y", "kind": "text", "label": "Start date year", "required": True},
+              {"id": "m", "kind": "select", "label": "Start date month", "options": ["January", "November"], "required": True},
+              {"id": "t", "kind": "text", "label": "Title", "required": True},
+              {"id": "j", "kind": "text", "label": "Earliest start date", "required": True}]
+    out = autofill.decide(fields, profile=profile, resume_name="")
+    got = {a["id"]: a["value"] for a in out["answers"]}
+    assert got == {"g2": "I don't wish to answer", "t": "Software Engineer", "j": "30 days"}
+    assert out["missing"] == ["Gender", "Start date year", "Start date month"]
+
+
+def test_city_and_state_together():
+    p = autofill.Profile(city="Bangalore", state="Karnataka")
+    assert autofill.rule_answer("In what city and state is your primary residence? (e.g. San Jose, CA)", p) == "Bangalore, Karnataka"
+    assert autofill.rule_answer("State", p) == "Karnataka"

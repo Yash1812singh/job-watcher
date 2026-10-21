@@ -14,11 +14,18 @@
   // boxes for the next step's questions, so "this box was handled" alone isn't enough.
   let tried = new WeakMap();
   const sig = (f) => `${location.pathname}${location.hash}|${f.label}|${f.options.join("|")}`;
-  const isFresh = (f) => tried.get(f.el) !== sig(f) && !isDone(f);
+  // Boxes we filled that came back empty: the page redrew itself after loading (Greenhouse can, late)
+  // and wiped them. Fill those again (twice at most, and only soon after: never fight the user).
+  const filledAt = new WeakMap();
+  const counted = new Set();
+  const refills = new WeakMap();
+  const wiped = (f) => Date.now() - (filledAt.get(f.el) || 0) < 60000 && (refills.get(f.el) || 0) < 2;
+  const isFresh = (f) => !isDone(f) && (tried.get(f.el) !== sig(f) || wiped(f));
 
   // ── the panel ─────────────────────────────────────────────────────────────
 
   let panel = null;
+  let panelHost = null;
   function ui() {
     if (panel) return panel;
     const host = document.createElement("div");
@@ -65,6 +72,7 @@
         <div class="needs" hidden></div>
       </div>`;
     document.documentElement.appendChild(host);
+    panelHost = host;
     const $ = (s) => root.querySelector(s);
     $(".t").textContent = "Fill with AI";
     $(".again").onclick = () => fill(true);
@@ -215,7 +223,9 @@
     for (const e of all("input, textarea, select")) {
       const type = (e.type || e.tagName).toLowerCase();
       const combo = e.getAttribute("role") === "combobox" || e.getAttribute("aria-autocomplete") === "list" || /^(listbox|true)$/.test(e.getAttribute("aria-haspopup") || "")
-        || !!e.closest('[class*="select__"], [class*="Select-"]');
+        || !!e.closest('[class*="select__"], [class*="Select-"]')
+        // a box with a suggestion list next to it (Lever's location): a place must be picked from the list
+        || (type === "text" && !!e.parentElement?.querySelector(':scope > [class*="dropdown"], :scope > [class*="autocomplete"], :scope > [class*="suggest"]'));
       if (["hidden", "submit", "button", "search", "image", "reset", "password"].includes(type) && !(type === "search" && combo)) continue;
       if (type !== "file" && (!visible(e) || e.disabled || (e.readOnly && !combo))) continue;
       if (type !== "file" && e.closest('[aria-hidden="true"]')) continue;
@@ -290,11 +300,23 @@
     el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
   }
 
+  async function typeKeys(el, text) {
+    setValue(el, "");
+    let typed = "";
+    for (const ch of text) {
+      typed += ch;
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true, composed: true }));
+      setValue(el, typed);
+      el.dispatchEvent(new KeyboardEvent("keyup", { key: ch, bubbles: true, composed: true }));
+      await sleep(60);
+    }
+  }
+
   function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
   }
 
-  const OPTION = '[role="option"], [class*="select__option"], .select2-results__option, [role="listbox"] li';
+  const OPTION = '[role="option"], [class*="select__option"], .select2-results__option, [role="listbox"] li, [class*="dropdown-results"] > *, [class*="suggestions"] > li';
   const optText = (o) => clean(o.innerText || o.getAttribute("aria-label") || o.textContent);
   const seen = new WeakMap(); // dropdown → the choices it showed when opened
 
@@ -306,7 +328,8 @@
   }
   const key = (el, k, code) => el?.dispatchEvent(new KeyboardEvent("keydown", { key: k, code: k, keyCode: code, bubbles: true, composed: true }));
 
-  // Open a dropdown and wait for its choices (some open on mousedown, some on click, some on ↓).
+  // Open a dropdown and wait for its choices: a whole click, the way a mouse does it (react-select only
+  // opens on the full press-release-click), else ↓.
   async function openList(el) {
     const shown = async (ms) => {
       for (let t = 0; t < ms / 150; t++) {
@@ -317,13 +340,10 @@
       return [];
     };
     el.scrollIntoView({ block: "center" });
+    fire(el, ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]);
+    const o = await shown(900);
+    if (o.length) return o;
     el.focus();
-    fire(el, ["pointerdown", "mousedown"]);
-    let o = await shown(450);
-    if (o.length) return o;
-    fire(el, ["pointerup", "mouseup", "click"]);
-    o = await shown(900);
-    if (o.length) return o;
     key(el, "ArrowDown", 40);
     return shown(900);
   }
@@ -347,8 +367,11 @@
     if (!v) return null;
     const first = v.split(",")[0].trim();
     const t = opts.map((o) => [o, norm(optText(o))]);
-    const hit = t.find(([, x]) => x === v) || t.find(([, x]) => x.startsWith(v)) || t.find(([, x]) => x.includes(v))
-      || t.find(([, x]) => x.length > 2 && ` ${v} `.includes(` ${x} `))
+    const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const word = (x, w) => new RegExp(`(^|[^\\p{L}\\p{N}])${esc(w)}($|[^\\p{L}\\p{N}])`, "u").test(x);
+    // "India" is "India (+91)", not "British Indian Ocean Territory": whole words first
+    const hit = t.find(([, x]) => x === v) || t.find(([, x]) => x.startsWith(v) && word(x, v)) || t.find(([, x]) => word(x, v))
+      || t.find(([, x]) => x.length > 2 && word(v, x)) || t.find(([, x]) => x.includes(v))
       || (first !== v && (t.find(([, x]) => x === first) || t.find(([, x]) => x.startsWith(first + ","))));
     return hit ? hit[0] : null;
   }
@@ -414,12 +437,19 @@
         // a searchable box: type, then pick from what it finds (place lookups can take a few seconds)
         const city = value.split(",")[0].trim();
         const renamed = norm(city) !== city.toLowerCase() ? norm(city).replace(/^./, (c) => c.toUpperCase()) : city; // Bangalore → Bengaluru
+        const until = Date.now() + 15000; // a box that never offers a match shouldn't hold up the rest
         for (const q of typeable && !pick ? [...new Set([value, city, renamed])] : []) {
-          el.focus();
-          setValue(el, q); // one go: React keeps it (a letter at a time gets reset)
-          for (let t = 0; t < 24 && !pick; t++) {
-            await sleep(250);
-            pick = bestOption(optionsFor(el), value);
+          if (Date.now() > until) break;
+          // in one go first (some React boxes reset a letter at a time); some lookups only start on keystrokes
+          for (const how of ["once", "keys"]) {
+            el.focus();
+            if (how === "once") setValue(el, q);
+            else await typeKeys(el, q);
+            for (let t = 0; t < (how === "once" ? 10 : 24) && !pick; t++) {
+              await sleep(250);
+              pick = bestOption(optionsFor(el), value);
+            }
+            if (pick) break;
           }
           if (pick) break;
         }
@@ -476,6 +506,9 @@
     state.busy = true;
     try {
       await pass(manual);
+    } catch (e) {
+      console.warn("Fill with AI:", e);
+      if (panel) panel.status(`Something went wrong on this page (${e.message}). Click “Fill again”.`, "err");
     } finally {
       state.busy = false;
       if (state.pending) {
@@ -499,12 +532,16 @@
       return;
     }
 
-    const fields = collect();
-    if (!fields.length) {
+    let fields = collect();
+    if (!isForm(fields)) {
       if (!isTop) return; // a frame without a form (ads, chat widgets): stay quiet
       const p = ui();
       const openForm = applyButton();
-      if (signInWall()) {
+      p.showContinue(false);
+      if (formFrame()) {
+        p.status("The application form is lower on this page: I'm filling it there.", "ok");
+        p.needs([], "Scroll down to it; anything that needs you is listed in its own panel.");
+      } else if (signInWall()) {
         p.status("This site needs you to sign in or create an account.", "warn");
         p.needs([], "Do that here, then I'll fill the application as soon as it appears.");
       } else {
@@ -515,6 +552,7 @@
     }
 
     const p = ui();
+    if (!(await interactive(fields, p))) fields = collect(); // it redrew itself meanwhile: look again
     p.title(`Fill with AI · ${document.title.replace(/\s+/g, " ").trim().slice(0, 80) || location.hostname}`);
     if (auto?.jobId && !state.opened) {
       state.opened = true;
@@ -544,9 +582,16 @@
         const f = byId[a.id];
         if (!f) continue;
         try {
+          if (filledAt.has(f.el)) refills.set(f.el, (refills.get(f.el) || 0) + 1); // wiped by the page, or cleared
           if (await apply(f, a)) {
-            state.filled++;
-            if (a.source === "ai" || a.source === "cover") state.byAI++;
+            filledAt.set(f.el, Date.now());
+            // each question counts once, even when the page redraws it and it's filled again
+            const q = `${location.pathname}|${f.label}`;
+            if (!counted.has(q)) {
+              counted.add(q);
+              state.filled++;
+              if (a.source === "ai" || a.source === "cover") state.byAI++;
+            }
             mark(f, "#2f9e55");
           }
         } catch (e) {
@@ -554,14 +599,53 @@
         }
       }
     }
-    review();
+    review(true);
+  }
+
+  // A page can look ready before its scripts have taken over the form (Greenhouse's dropdowns don't
+  // open for a few seconds). Click one dropdown to check; until it opens, wait instead of filling
+  // into a page that ignores it. Returns false if the page redrew itself while waiting.
+  async function interactive(fields, p) {
+    const probe = fields.find((f) => f.kind === "combobox" && f.el.getAttribute("aria-expanded") === "false");
+    if (!probe) return true;
+    const el = probe.el;
+    for (let i = 0; i < 20 && el.isConnected; i++) {
+      fire(el, ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]);
+      for (let t = 0; t < 6; t++) {
+        await sleep(150);
+        if (el.getAttribute("aria-expanded") === "true") {
+          closeList(el);
+          el.blur();
+          await sleep(150);
+          return true;
+        }
+      }
+      if (i === 0) p.busy("Waiting for the page to finish loading…");
+      await sleep(1000);
+    }
+    return el.isConnected;
+  }
+
+  // A job description page has stray boxes too (search, cookie settings…): that's not the form yet.
+  // an application form shown inside this page (Greenhouse, Lever… on a company's own careers site)
+  const formFrame = () => all("iframe").find((f) => visible(f) && f.getBoundingClientRect().height > 200
+    && /greenhouse|lever\.co|ashbyhq|smartrecruiters|workable|myworkday|icims|jobvite|recruitee|breezy|bamboohr|teamtailor|personio/i.test(f.src || ""));
+
+  function isForm(fields) {
+    if (!fields.length) return false;
+    if (!applyButton() && !(isTop && formFrame())) return true;
+    // a newsletter box next to the description isn't the application: that has several questions
+    return fields.filter((f) => f.required || ["email", "tel", "file", "textarea"].includes(f.kind) || /name|email|phone|resume|\bcv\b/i.test(f.label)).length >= 2;
   }
 
   // What's still left for the user; re-checked as they work and after every pass.
-  function review() {
+  function review(final = false) {
     if (!panel || state.submitted || state.stopped) return;
+    if (state.busy && !final) return; // mid-fill: the panel says "Filling…" until the pass is over
+    const fields = collect();
+    if (!isForm(fields)) return; // nothing to fill here: the panel keeps saying what to click
     const needs = [];
-    for (const f of collect()) {
+    for (const f of fields) {
       const done = isDone(f) && !picks.has(f.el);
       if (f.required && !done) {
         needs.push({ el: f.el, text: picks.has(f.el) ? `Pick “${f.label}” from its list` : f.kind === "file" ? `Attach: ${f.label}` : `Answer: ${f.label}` });
@@ -618,6 +702,18 @@
       checkForNewStep();
     });
     observeAll();
+    // some sites (Greenhouse's new boards) redraw the whole page right after it loads: that removes the
+    // panel and replaces the <body> being watched. Put both back.
+    let body = document.body;
+    setInterval(() => {
+      if (state.stopped) return;
+      if (panelHost && !panelHost.isConnected) document.documentElement.appendChild(panelHost);
+      if (document.body && document.body !== body) {
+        body = document.body;
+        observer.observe(body, { childList: true, subtree: true, characterData: true });
+        checkForNewStep();
+      }
+    }, 1500);
     window.addEventListener("popstate", checkForNewStep);
     window.addEventListener("hashchange", checkForNewStep);
     // the user's own typing (and ours) only re-checks what's left; it never delays spotting a new step
@@ -627,5 +723,8 @@
   }
 
   window.__fwai = { fill };
-  fill(!auto).then(watch);
+  // start once the page has finished loading (and its scripts have taken over the form)
+  const ready = () => new Promise((ok) => (document.readyState === "complete" ? ok() : addEventListener("load", ok, { once: true })))
+    .then(() => sleep(800));
+  ready().then(() => fill(!auto)).then(watch);
 })();

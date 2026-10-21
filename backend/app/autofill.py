@@ -238,13 +238,17 @@ def profile_gaps(p: Profile, has_resume: bool | None = None) -> list[str]:
 # ── Rules ────────────────────────────────────────────────────────────────────
 
 YES, NO = "Yes", "No"
+# who someone is: never let the AI choose an answer the user didn't give
+PERSONAL = re.compile(r"gender|\bsex\b|race|ethnic|hispanic|latin|veteran|military|disabilit|pronoun|sexual|transgender|religion|caste|marital|nationality|citizenship|\bage\b|date\s*of\s*birth", re.I)
 DECLINE = "__decline__"   # pick the "prefer not to say" option
 AGREE = "__agree__"       # tick the consent box / pick "I agree"
 OPEN = None               # recognised, but the user left it empty: an open question may still go to the AI
 
 
 def _or_decline(value: str) -> str:
-    return value or DECLINE
+    if not value or re.search(r"prefer\s*not|decline|don.?t\s*wish|rather\s*not|not\s*(to\s*)?(say|disclose)", value, re.I):
+        return DECLINE  # pick the form's own "prefer not to say", whatever it's called (never something else)
+    return value
 
 
 def _languages(p: Profile) -> str:
@@ -286,6 +290,8 @@ RULES: list[tuple[re.Pattern, object]] = [(re.compile(p, re.I), a) for p, a in [
     (r"weekend|night\s*shift|rotational|shifts?\b", lambda p: p.shifts),
     (r"notice.{0,40}(negotiable|buy\s*-?\s*out|reduc|early)", lambda p: p.notice_negotiable or OPEN),
     (r"last\s*working\s*day|\blwd\b", lambda p: p.last_working_day),
+    # a past job's dates in an employment-history block: only the user knows them
+    (r"(start|end|from|to)\s*(date\s*)?(month|year)\b|^(start|end)\s*date$", ""),
     (r"notice\s*period|how\s*soon|when\s*can\s*you\s*(join|start)|(start|joining)\s*date|earliest.{0,20}(start|join)",
      lambda p: p.notice_period or p.availability),
     (r"currently\s*(employed|working)|employment\s*status", lambda p: p.employment_status),
@@ -297,12 +303,13 @@ RULES: list[tuple[re.Pattern, object]] = [(re.compile(p, re.I), a) for p, a in [
      lambda p: p.reason_for_change or OPEN),
     (r"preferred\s*(work\s*|job\s*)?location|which\s*(location|city|office)|location\s*preference", lambda p: p.preferred_locations),
     (r"(current|present|most\s*recent)\s*(company|employer|organi[sz]ation)|^company(\s*name)?$|^org", lambda p: p.current_company),
-    (r"(current|present)\s*(title|role|position|designation)|job\s*title", lambda p: p.current_title),
+    (r"(current|present)\s*(title|role|position|designation)|job\s*title|^title$", lambda p: p.current_title),
     (r"relevant\s*(years|experience)|years.{0,30}experience\s*(in|with)\s", lambda p: p.relevant_years or OPEN),
     (r"years?\s*(of)?\s*(professional\s*|total\s*|work\s*|overall\s*)?experience|how\s*many\s*years|total\s*experience", lambda p: p.years),
     (r"address\s*line\s*2|apartment|suite", lambda p: ""),
     (r"street|address(\s*line\s*1)?\b|residential\s*address", lambda p: p.address or p.location),
     (r"\bcountry\b", lambda p: p.country),
+    (r"\bcity\b.{0,15}\bstate\b", lambda p: ", ".join(x for x in (p.city, p.state) if x) or p.location),
     (r"\bstate\b|province", lambda p: p.state),
     (r"zip|postal|pin\s*code", lambda p: p.zip),
     (r"\bcity\b|current\s*location|^location|where\s*are\s*you\s*(based|located)", lambda p: p.city or p.location),
@@ -361,7 +368,13 @@ def pick_option(answer: str, options: list[str]) -> str | None:
         hit = next((o for o in opts if re.match(rf"\s*{w}\b", o, re.I)), None)
         if hit:
             return hit
-    return next((o for o in opts if a in _same_place(o.lower()) or _same_place(o.lower()) in a), None)
+    # "India" is "India (+91)", not "British Indian Ocean Territory": whole words first, the start of an option best
+    low = [(o, _same_place(o.strip().lower())) for o in opts]
+    word = re.compile(rf"(?<!\w){re.escape(a)}(?!\w)")
+    return (next((o for o, x in low if x.startswith(a) and word.match(x)), None)
+            or next((o for o, x in low if word.search(x)), None)
+            or next((o for o, x in low if len(x) > 2 and re.search(rf"(?<!\w){re.escape(x)}(?!\w)", a)), None)
+            or next((o for o, x in low if a in x), None))
 
 
 # a city's old and new names, so "Bangalore" in a profile matches "Bengaluru" in a list
@@ -475,7 +488,8 @@ def decide(fields: list[dict], job: str = "", page_text: str = "", profile: Prof
                 answers.append({"id": f["id"], "value": choice, "source": "profile"})
             elif answer is None and (required or kind == "radio"):
                 ask_ai.append((f, options))
-            elif isinstance(answer, str) and answer and not answer.startswith("__"):
+            elif isinstance(answer, str) and answer and not answer.startswith("__") and not PERSONAL.search(label) \
+                    and not any(re.fullmatch(r"(mr|mrs|ms|miss|dr|mx)\.?", o.strip(), re.I) for o in options):
                 # the profile has an answer but not in these words ("45 days" vs "30-60 days"): closest option
                 ask_ai.append(({**f, "label": f"{label} (the applicant's own answer: {answer})"}, options))
             elif required:

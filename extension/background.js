@@ -71,7 +71,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     const s = await server();
     try {
       if (msg.type === "decide") {
-        const r = await fetch(s.base + s.decide, { method: "POST", headers: { ...s.headers, "Content-Type": "application/json" }, body: JSON.stringify(msg.payload) });
+        const ask = () => fetch(s.base + s.decide, { method: "POST", headers: { ...s.headers, "Content-Type": "application/json" }, body: JSON.stringify(msg.payload) });
+        let r = await ask();
+        if (r.status >= 500) { // the free server can hiccup (or be waking up): once more
+          await new Promise((ok) => setTimeout(ok, 3000));
+          r = await ask();
+        }
         if (r.status === 401) throw new Error("your extension key isn't valid. Open the extension's Options and paste a key from the Fill with AI page");
         if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
         reply({ ok: true, data: await r.json() });
