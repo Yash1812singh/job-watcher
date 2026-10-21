@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Fill with AI (Job Watcher)",
+  "version": "1.0.0",
+  "description": "Fills the job application on this page from your profile, with AI for open questions. You review and submit.",
+  "action": { "default_title": "Fill this application (Alt+Shift+F)" },
+  "commands": { "_execute_action": { "suggested_key": { "default": "Alt+Shift+F" } } },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "options_page": "options.html",
+  "icons": { "128": "icon128.png" }
+}

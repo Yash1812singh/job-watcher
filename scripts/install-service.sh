@@ -37,6 +37,18 @@ if [[ -f "$OLD_DB" && ! -f "$APP/jobwatcher.db" ]]; then
   sqlite3 "$OLD_DB" ".backup '$APP/jobwatcher.db'"
 fi
 
+# "Fill with AI" (the browser extension in extension/): copy your AutoApply profile, resume and
+# Groq key where the service can read them (it can't read Desktop). Re-run after editing them.
+AUTOAPPLY="${AUTOAPPLY:-$HOME/Desktop/Python/autoapply}"
+FILL="$APP/autofill"
+if [[ -f "$AUTOAPPLY/config/user_profile.yaml" ]]; then
+  mkdir -p "$FILL" && chmod 700 "$FILL"
+  cp "$AUTOAPPLY/config/user_profile.yaml" "$FILL/profile.yaml"
+  [[ -f "$AUTOAPPLY/data/resume.pdf" ]] && cp "$AUTOAPPLY/data/resume.pdf" "$FILL/resume.pdf"
+  (umask 077; grep -E '^GROQ_API_KEY=' "$AUTOAPPLY/.env" 2>/dev/null > "$FILL/keys.env" || true)
+  echo "Fill with AI: using the profile and resume from $AUTOAPPLY"
+fi
+
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -55,6 +67,9 @@ cat > "$PLIST" <<EOF
   <dict>
     <key>JOB_WATCHER_DB</key><string>$APP/jobwatcher.db</string>
     <key>JOB_WATCHER_FRONTEND</key><string>$APP/web</string>
+    <key>JOB_WATCHER_APPLY_PROFILE</key><string>$FILL/profile.yaml</string>
+    <key>JOB_WATCHER_APPLY_RESUME</key><string>$FILL/resume.pdf</string>
+    <key>JOB_WATCHER_APPLY_KEYS</key><string>$FILL/keys.env</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

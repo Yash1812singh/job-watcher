@@ -14,10 +14,11 @@ from urllib.parse import urlparse
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
-from . import backup, db, monitor
+from . import autofill, backup, db, monitor
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -330,6 +331,48 @@ def mark_job_seen(job_id: int) -> dict:
     if cur.rowcount == 0:
         raise HTTPException(404, "Job not found")
     return {"updated": 1}
+
+
+# ── Fill with AI (local only) ────────────────────────────────────────────────
+# Used by the browser extension in extension/: it sends the fields on the application page you're
+# looking at and fills in the answers. Nothing is submitted; you review and click Next/Submit.
+
+class AutofillField(BaseModel):
+    id: str
+    kind: str = "text"
+    label: str = ""
+    name: str = ""
+    options: list[str] = []
+    required: bool = False
+    value: str = ""
+
+
+class AutofillRequest(BaseModel):
+    url: str = ""
+    job: str = ""             # page title, e.g. "Backend Engineer at Acme"
+    page_text: str = ""       # some visible text, so AI answers fit the job
+    fields: list[AutofillField] = Field(max_length=400)
+
+
+@app.get("/api/autofill/status")
+def autofill_status() -> dict:
+    return autofill.status()
+
+
+@app.post("/api/autofill")
+def autofill_page(body: AutofillRequest) -> dict:
+    try:
+        profile = autofill.load_profile()
+    except Exception as exc:
+        raise HTTPException(500, f"Couldn't read your profile ({autofill.PROFILE_PATH}): {exc}") from exc
+    return autofill.decide([f.model_dump() for f in body.fields], body.job, body.page_text, profile)
+
+
+@app.get("/api/autofill/resume")
+def autofill_resume() -> FileResponse:
+    if not autofill.RESUME_PATH.is_file():
+        raise HTTPException(404, f"No resume at {autofill.RESUME_PATH}")
+    return FileResponse(autofill.RESUME_PATH, media_type="application/pdf", filename=autofill.RESUME_PATH.name)
 
 
 # ── Website ──────────────────────────────────────────────────────────────────
