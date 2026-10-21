@@ -14,7 +14,6 @@ from urllib.parse import urlparse
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
@@ -369,10 +368,12 @@ def autofill_page(body: AutofillRequest) -> dict:
 
 
 @app.get("/api/autofill/resume")
-def autofill_resume() -> FileResponse:
-    if not autofill.RESUME_PATH.is_file():
+def autofill_resume() -> Response:
+    data = autofill.resume_bytes()
+    if data is None:
         raise HTTPException(404, f"No resume at {autofill.RESUME_PATH}")
-    return FileResponse(autofill.RESUME_PATH, media_type="application/pdf", filename=autofill.RESUME_PATH.name)
+    return Response(data, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{autofill.resume_name()}"'})
 
 
 # ── Website ──────────────────────────────────────────────────────────────────

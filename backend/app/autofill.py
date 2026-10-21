@@ -9,7 +9,8 @@ Next or Submit yourself.
 
 Settings (environment variables):
   JOB_WATCHER_APPLY_PROFILE  profile YAML (default ~/Desktop/Python/autoapply/config/user_profile.yaml)
-  JOB_WATCHER_APPLY_RESUME   resume PDF   (default ~/Desktop/Python/autoapply/data/resume.pdf)
+  JOB_WATCHER_APPLY_RESUME   resume PDF   (default ~/Desktop/Python/autoapply/data/resume.pdf); a path ending
+                             in .b64 holds it base64-encoded (hosts whose secret files are text, e.g. Render)
   GROQ_API_KEY               for AI answers to open questions (optional); or set
   JOB_WATCHER_APPLY_KEYS     a .env-style file holding GROQ_API_KEY= (default ~/Desktop/Python/autoapply/.env)
   JOB_WATCHER_APPLY_AI_MODEL Groq model for those answers (default openai/gpt-oss-120b)
@@ -32,6 +33,20 @@ PROFILE_PATH = Path(os.environ.get("JOB_WATCHER_APPLY_PROFILE", HOME / "Desktop/
 RESUME_PATH = Path(os.environ.get("JOB_WATCHER_APPLY_RESUME", HOME / "Desktop/Python/autoapply/data/resume.pdf"))
 GROQ_MODEL = os.environ.get("JOB_WATCHER_APPLY_AI_MODEL", "openai/gpt-oss-120b")
 KEYS_PATH = Path(os.environ.get("JOB_WATCHER_APPLY_KEYS", HOME / "Desktop/Python/autoapply/.env"))
+
+
+def resume_name() -> str:
+    return RESUME_PATH.name.removesuffix(".b64")
+
+
+def resume_bytes() -> bytes | None:
+    import base64
+
+    try:
+        data = RESUME_PATH.read_bytes()
+    except OSError:
+        return None
+    return base64.b64decode(data) if RESUME_PATH.suffix == ".b64" else data
 
 
 def groq_key() -> str:
@@ -138,7 +153,7 @@ def profile_gaps(p: Profile) -> list[str]:
     wanted = {"first name": p.first_name, "last name": p.last_name, "email": p.email, "phone": p.phone,
               "city": p.city, "LinkedIn URL": p.linkedin}
     gaps = [k for k, v in wanted.items() if not v]
-    if not RESUME_PATH.exists():
+    if not RESUME_PATH.is_file():
         gaps.append("resume PDF")
     return gaps
 
@@ -274,8 +289,8 @@ def decide(fields: list[dict], job: str = "", page_text: str = "", profile: Prof
         if kind == "file":
             words = label + " " + (f.get("name") or "")
             if re.search(r"resume|\bcv\b|curriculum|autofill", words, re.I) or (required and not re.search(r"cover|photo|transcript", words, re.I)):
-                if RESUME_PATH.exists():
-                    answers.append({"id": f["id"], "value": RESUME_PATH.name, "source": "resume"})
+                if RESUME_PATH.is_file():
+                    answers.append({"id": f["id"], "value": resume_name(), "source": "resume"})
                 elif required:
                     missing.append(label or "Resume")
             continue
@@ -323,5 +338,5 @@ def status() -> dict:
         prof = {"loaded": True, "name": p.full_name, "email": p.email, "gaps": profile_gaps(p)}
     except Exception as exc:
         prof = {"loaded": False, "error": str(exc)[:200], "gaps": []}
-    return {"profile": prof, "resume": RESUME_PATH.name if RESUME_PATH.exists() else None,
+    return {"profile": prof, "resume": resume_name() if RESUME_PATH.is_file() else None,
             "ai": bool(groq_key()), "ai_model": GROQ_MODEL}

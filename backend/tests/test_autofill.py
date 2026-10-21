@@ -86,3 +86,15 @@ def test_pick_option_understands_yes_no_and_declines():
     assert autofill.pick_option(autofill.AGREE, ["I acknowledge"]) == "I acknowledge"
     assert autofill.pick_option("Pune", ["Select…", "Mumbai", "Pune"]) == "Pune"
     assert autofill.pick_option("Bengaluru", ["Mumbai", "Pune"]) is None
+
+
+def test_a_base64_resume_is_served_decoded(tmp_path, monkeypatch):
+    import base64
+    from fastapi.testclient import TestClient
+    from app import main
+    pdf = b"%PDF-1.4 real bytes"
+    path = tmp_path / "resume.pdf.b64"
+    path.write_bytes(base64.b64encode(pdf))
+    monkeypatch.setattr(autofill, "RESUME_PATH", path)
+    r = TestClient(main.app).get("/api/autofill/resume")
+    assert r.status_code == 200 and r.content == pdf and 'filename="resume.pdf"' in r.headers["content-disposition"]

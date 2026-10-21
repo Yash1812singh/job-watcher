@@ -186,9 +186,12 @@ def test_a_hung_check_is_abandoned_and_the_others_keep_going(site_id, monkeypatc
         await task
 
     asyncio.run(run())
-    release.set()
     with db.connect() as conn:
         rows = {r["id"]: r for r in conn.execute("SELECT id, last_status, last_error FROM sites")}
+    release.set()
+    # let the abandoned check finish here, so it can't mark progress during a later test
+    for t in [t for t in threading.enumerate() if t.name.startswith("check-")]:
+        t.join(5)
     assert rows[site_id]["last_status"] == "error" and "didn't answer" in rows[site_id]["last_error"]
     assert rows[other]["last_status"] == "ok"   # checked once the hung one was given up on
 
