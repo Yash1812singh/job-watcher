@@ -40,7 +40,12 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   chrome.tabs.create({ url: `${server.replace(/\/+$/, "")}/fill/#extension` });
 });
 
-chrome.action.onClicked.addListener((tab) => start(tab.id, null));
+// Started by hand: keep filling this tab's later pages too (multi-page applications), until the
+// panel is closed or AUTO_HOURS pass.
+chrome.action.onClicked.addListener(async (tab) => {
+  await chrome.storage.session.set({ [autoKey(tab.id)]: { jobId: null, started: Date.now() } });
+  start(tab.id, null);
+});
 
 chrome.tabs.onUpdated.addListener(async (tabId, change, tab) => {
   if (change.status !== "complete" || !tab.url || !/^https?:/.test(tab.url)) return;

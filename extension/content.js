@@ -9,7 +9,12 @@
   }
   const auto = window.__fwaiAuto || null;   // { jobId } when opened from the Fill with AI website
   const isTop = window === window.top;
-  const state = { run: 0, busy: false, filled: 0, byAI: 0, stopped: false, submitted: false, opened: false };
+  const state = { run: 0, busy: false, pending: false, filled: 0, byAI: 0, stopped: false, submitted: false, opened: false };
+  // Which question each box was last filled for. Multi-step forms often reuse the same input
+  // boxes for the next step's questions, so "this box was handled" alone isn't enough.
+  let tried = new WeakMap();
+  const sig = (f) => `${location.pathname}${location.hash}|${f.label}|${f.options.join("|")}`;
+  const isFresh = (f) => tried.get(f.el) !== sig(f) && !isDone(f);
 
   // ── the panel ─────────────────────────────────────────────────────────────
 
@@ -332,12 +337,20 @@
   // ── one pass ──────────────────────────────────────────────────────────────
 
   async function fill(manual = false) {
-    if (state.busy || state.stopped) return;
+    if (state.stopped) return;
+    if (state.busy) {           // the next step appeared while this one was still filling: do it right after
+      state.pending = true;
+      return;
+    }
     state.busy = true;
     try {
       await pass(manual);
     } finally {
       state.busy = false;
+      if (state.pending) {
+        state.pending = false;
+        setTimeout(() => fill(false), 300);
+      }
     }
   }
 
@@ -378,7 +391,7 @@
     }
 
     // only fields not looked at yet (or all of them when the user asks to fill again)
-    const wanted = fields.filter((f) => (manual || !f.el.dataset.fwaiTried) && !isDone(f));
+    const wanted = fields.filter((f) => (manual ? !isDone(f) : isFresh(f)));
     if (wanted.length) {
       p.busy(`Filling ${wanted.length} field${wanted.length === 1 ? "" : "s"}…`);
       const pageText = (document.querySelector("main, [role=main], #content, body")?.innerText || "").replace(/\s+/g, " ").slice(0, 3000);
@@ -387,7 +400,7 @@
         payload: { url: location.href, job: document.title.trim().slice(0, 200), job_id: auto?.jobId || null, page_text: pageText,
                    fields: wanted.map(({ el, ids, ...f }) => f) },
       });
-      for (const f of wanted) for (const e of f.ids) e.dataset.fwaiTried = "1";
+      for (const f of wanted) for (const e of f.ids) tried.set(e, sig(f));
       if (!res.ok) {
         p.status(res.error, "err");
         return;
@@ -442,24 +455,31 @@
   // ── keep watching: the user's own edits, new steps, the confirmation page ──
 
   let observer = null;
-  let timer = null;
-  function later(fn, ms) {
-    clearTimeout(timer);
-    timer = setTimeout(fn, ms);
+  let fillTimer = null;
+  let reviewTimer = null;
+  let lastHref = location.href;
+  function checkForNewStep() {
+    clearTimeout(fillTimer);
+    fillTimer = setTimeout(() => {
+      if (location.href !== lastHref) lastHref = location.href; // a step change in a single-page form
+      if (collect().some(isFresh) || SUCCESS.test(document.body?.innerText || "")) fill(false);
+      else review();
+    }, 1000);
   }
   function watch() {
     if (state.stopped) return;
     observer = new MutationObserver((muts) => {
-      if (muts.every((m) => m.target.closest?.("#fwai-panel-host") || m.target.id === "fwai-panel-host")) return;
-      later(() => {
-        const fresh = collect().some((f) => !f.el.dataset.fwaiTried && !isDone(f));
-        if (fresh || SUCCESS.test(document.body?.innerText || "")) fill(false);
-        else review();
-      }, 1200);
+      if (muts.every((m) => (m.target.nodeType === 1 ? m.target : m.target.parentElement)?.closest?.("#fwai-panel-host"))) return;
+      checkForNewStep();
     });
-    observer.observe(document.body, { childList: true, subtree: true });
-    document.addEventListener("input", () => later(review, 600), true);
-    document.addEventListener("change", () => later(review, 600), true);
+    // characterData: React often keeps the same boxes and only changes the question text
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    window.addEventListener("popstate", checkForNewStep);
+    window.addEventListener("hashchange", checkForNewStep);
+    // the user's own typing (and ours) only re-checks what's left; it never delays spotting a new step
+    const recheck = () => { clearTimeout(reviewTimer); reviewTimer = setTimeout(review, 600); };
+    document.addEventListener("input", recheck, true);
+    document.addEventListener("change", recheck, true);
   }
 
   window.__fwai = { fill };
