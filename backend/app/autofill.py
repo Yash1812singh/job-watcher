@@ -388,7 +388,8 @@ def ai_answer(profile: Profile, question: str, job: str, page_text: str, options
                f"Some text from the application page: {page_text[:1500]}\n\nApplicant:\n{profile.context()}\n\n"
                f"Question on the form: {question}{choose}\n"
                "Answer as the applicant, in first person, truthfully and only from the details above, in at most 80 words of plain text. "
-               "Don't invent employers, numbers or links. If the details don't cover it, give a short honest answer.")
+               "Don't invent employers, numbers or links. Spell the company and role names exactly as they appear above. "
+               "If the details don't cover it, give a short honest answer.")
 
 
 def cover_letter(profile: Profile, role: str, company: str, page_text: str = "") -> str:

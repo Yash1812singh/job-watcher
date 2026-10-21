@@ -126,33 +126,61 @@
   const visible = (e) => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length) && getComputedStyle(e).visibility !== "hidden";
   const clean = (t) => (t || "").replace(/\s+/g, " ").replace(/[*✱]/g, "").trim();
 
+  // Some forms (SmartRecruiters' Easy Apply, and other web-component forms) keep their boxes inside
+  // shadow roots, where document.querySelectorAll can't see them. Look inside every one, closed too.
+  const shadowOf = (e) => e.shadowRoot || (e.localName.includes("-") && (globalThis.chrome?.dom?.openOrClosedShadowRoot?.(e) || e.openOrClosedShadowRoot)) || null;
+  function roots() {
+    const out = [document];
+    for (let i = 0; i < out.length; i++) {
+      for (const e of out[i].querySelectorAll("*")) {
+        if (e.id === "fwai-panel-host") continue;
+        const r = shadowOf(e);
+        if (r) out.push(r);
+      }
+    }
+    return out;
+  }
+  const all = (sel) => roots().flatMap((r) => [...r.querySelectorAll(sel)]);
+  // closest(), climbing out of shadow roots to the component that holds them
+  function closestDeep(e, sel) {
+    for (let n = e; n; n = n.getRootNode().host) {
+      const m = n.closest(sel);
+      if (m) return m;
+    }
+    return null;
+  }
+  const byId = (e, id) => e.getRootNode().getElementById?.(id) || document.getElementById(id);
+  // the page's text, including what's inside components
+  const pageText = () => roots().map((r) => (r === document ? document.body?.innerText || ""
+    : [...r.children].filter((c) => c.localName !== "style").map((c) => c.innerText || "").join(" "))).join(" ");
+
   function captchaChallenge() {
     const sel = "iframe[src*='recaptcha/api2/bframe'], iframe[src*='recaptcha/enterprise/bframe'], iframe[src*='hcaptcha.com'][src*='challenge'], iframe[title*='challenge' i]";
-    return [...document.querySelectorAll(sel)].some((f) => visible(f) && f.getBoundingClientRect().height > 100);
+    return all(sel).some((f) => visible(f) && f.getBoundingClientRect().height > 100);
   }
   // a CAPTCHA checkbox the user must tick (the invisible kind has no visible box)
-  const captchaBox = () => [...document.querySelectorAll(".g-recaptcha, .h-captcha, .cf-turnstile, iframe[src*='turnstile']")]
+  const captchaBox = () => all(".g-recaptcha, .h-captcha, .cf-turnstile, iframe[src*='turnstile']")
     .find((e) => visible(e) && e.getBoundingClientRect().height > 30);
 
   function signInWall() {
-    const pw = [...document.querySelectorAll("input[type=password]")].filter(visible);
-    return pw.length > 0 && !document.querySelector("input[type=file]");
+    const pw = all("input[type=password]").filter(visible);
+    return pw.length > 0 && !all("input[type=file]").length;
   }
 
   const SUCCESS = /thank(s| you) for (applying|your (application|interest))|application (has been |was )?(submitted|received|sent)|we('ve| have) received your application|successfully (submitted|applied)|your application is (in|complete)/i;
 
   function nextButton() {
-    const cands = [...document.querySelectorAll("button, a[role=button], input[type=button], input[type=submit], [role=button]")]
+    const cands = all("button, a[role=button], input[type=button], input[type=submit], [role=button]")
       .filter((b) => visible(b) && !b.closest("#fwai-panel-host"));
     return cands.find((b) => {
-      const t = clean(b.innerText || b.value || b.getAttribute("aria-label"));
+      const t = clean(b.innerText || b.value || b.getAttribute("aria-label") || b.getRootNode().host?.innerText);
       return /^(next|continue|save (and|&) continue|proceed|next step|go to next)\b/i.test(t) && !/submit|apply|send|finish|complete/i.test(t);
     });
   }
 
   function applyButton() {
-    const cands = [...document.querySelectorAll("a, button")].filter(visible);
-    return cands.find((b) => /^(apply( now| for this (job|position|role))?|i'?m interested|start (your )?application)$/i.test(clean(b.innerText)));
+    const cands = all("a, button").filter(visible);
+    return cands.find((b) => /^(apply( now| for this (job|position|role))?|i'?m interested|start (your )?application)$/i.test(clean(b.innerText || b.getRootNode().host?.innerText)));
   }
 
   // ── collecting fields ────────────────────────────────────────────────────
@@ -165,21 +193,26 @@
     const labelOf = (e) => {
       let t = (e.labels && e.labels[0] && e.labels[0].innerText) || e.getAttribute("aria-label") || "";
       const by = e.getAttribute("aria-labelledby");
-      if (!t && by) t = by.split(" ").map((id) => document.getElementById(id)?.innerText || "").join(" ");
+      if (!t && by) t = by.split(" ").map((id) => byId(e, id)?.innerText || "").join(" ");
+      const root = e.getRootNode();
+      if (!t && root !== document) {   // a box inside a component: the component's label
+        t = root.host.getAttribute("label") || root.host.getAttribute("aria-label") || "";
+        if (!t && root.querySelectorAll("input, textarea, select").length === 1) t = root.querySelector("label, legend, [class*='label']")?.innerText || "";
+      }
       if (!t) {
-        const box = e.closest('fieldset, .field, .application-question, [data-automation-id^="formField"], [class*="fieldEntry"], [class*="question"], [class*="form-group"], [class*="FormField"]');
+        const box = closestDeep(e, 'fieldset, .field, .application-question, [data-automation-id^="formField"], [class*="fieldEntry"], [class*="question"], [class*="form-group"], [class*="FormField"]');
         if (box) t = box.querySelector('legend, label, [class*="label"], [class*="Label"], [class*="title"]')?.innerText || "";
       }
       return clean(t || e.placeholder || e.name || "");
     };
     const groupLabel = (e) => {
-      const box = e.closest('fieldset, .application-question, [data-automation-id^="formField"], [class*="fieldEntry"], [class*="question"], [role="radiogroup"], [role="group"], [class*="form-group"]');
+      const box = closestDeep(e, 'fieldset, .application-question, [data-automation-id^="formField"], [class*="fieldEntry"], [class*="question"], [role="radiogroup"], [role="group"], [class*="form-group"]');
       if (!box) return "";
       const head = box.querySelector('legend, .application-label, [class*="question-label"], [class*="title"], [class*="Label"]:not(:has(input)), [class*="label"]:not(:has(input))');
       return clean(head?.innerText || box.getAttribute("aria-label") || "");
     };
-    const isRequired = (e) => e.required || e.getAttribute("aria-required") === "true" || /[*✱]/.test((e.labels && e.labels[0] && e.labels[0].innerText) || "");
-    for (const e of document.querySelectorAll("input, textarea, select")) {
+    const isRequired = (e) => e.required || e.getAttribute("aria-required") === "true" || !!e.getRootNode().host?.hasAttribute("required") || /[*✱]/.test((e.labels && e.labels[0] && e.labels[0].innerText) || "");
+    for (const e of all("input, textarea, select")) {
       const type = (e.type || e.tagName).toLowerCase();
       if (["hidden", "submit", "button", "search", "image", "reset", "password"].includes(type)) continue;
       if (type !== "file" && (!visible(e) || e.disabled || e.readOnly)) continue;
@@ -225,8 +258,8 @@
   function setValue(el, value) {
     const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : el.tagName === "SELECT" ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
   }
 
   function sleep(ms) {
@@ -235,12 +268,13 @@
 
   function optionsFor(el) {
     const ids = [el.getAttribute("aria-controls"), el.getAttribute("aria-owns")].filter(Boolean).join(" ").split(/\s+/).filter(Boolean);
-    let lists = ids.map((id) => document.getElementById(id)).filter(Boolean);
+    let lists = ids.map((id) => byId(el, id)).filter(Boolean);
     if (!lists.length) {
-      const box = el.closest('[class*="select__"], [class*="Select"], [class*="combobox"], [class*="autocomplete"], [class*="field"]');
+      const box = closestDeep(el, '[class*="select__"], [class*="Select"], [class*="combobox"], [class*="autocomplete"], [class*="field"]');
       if (box) lists = [box.parentElement || box];
     }
-    return lists.flatMap((l) => [...l.querySelectorAll('[role="option"]')]).filter((o) => o.offsetParent !== null);
+    const opts = lists.flatMap((l) => [...l.querySelectorAll('[role="option"]')]).filter((o) => o.offsetParent !== null);
+    return opts.length ? opts : all('[role="option"]').filter((o) => o.offsetParent !== null); // a list drawn elsewhere on the page
   }
 
   function attach(el, name, bytes, type) {
@@ -248,8 +282,8 @@
     dt.items.add(new File([bytes], name, { type }));
     el.files = dt.files;
     el.dataset.fwaiFile = name;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
   }
 
   const picks = new WeakSet(); // dropdowns where we typed but the user has to choose from the list
@@ -306,13 +340,13 @@
       default:
         el.focus();
         setValue(el, value);
-        el.dispatchEvent(new Event("blur", { bubbles: true }));
+        el.dispatchEvent(new Event("blur", { bubbles: true, composed: true }));
         return true;
     }
   }
 
   function mark(f, color, strong = false) {
-    const box = f.ids.length > 1 ? f.el.closest("fieldset, .application-question, [role=radiogroup], [class*=question]") || f.el : f.el;
+    const box = f.ids.length > 1 ? closestDeep(f.el, "fieldset, .application-question, [role=radiogroup], [class*=question]") || f.el : f.el;
     box.style.outline = `2px solid ${color}`;
     box.style.outlineOffset = "2px";
     box.style.background = strong ? "rgba(245,165,36,.12)" : "";
@@ -355,7 +389,7 @@
   }
 
   async function pass(manual) {
-    if (SUCCESS.test(document.body?.innerText || "")) {
+    if (SUCCESS.test(pageText())) {
       if (!state.submitted) {
         state.submitted = true;
         ask({ type: "report", payload: { job_id: auto?.jobId || null, url: location.href, title: document.title, status: "submitted" } });
@@ -394,10 +428,10 @@
     const wanted = fields.filter((f) => (manual ? !isDone(f) : isFresh(f)));
     if (wanted.length) {
       p.busy(`Filling ${wanted.length} field${wanted.length === 1 ? "" : "s"}…`);
-      const pageText = (document.querySelector("main, [role=main], #content, body")?.innerText || "").replace(/\s+/g, " ").slice(0, 3000);
+      const text = pageText().replace(/\s+/g, " ").slice(0, 3000);
       const res = await ask({
         type: "decide",
-        payload: { url: location.href, job: document.title.trim().slice(0, 200), job_id: auto?.jobId || null, page_text: pageText,
+        payload: { url: location.href, job: document.title.trim().slice(0, 200), job_id: auto?.jobId || null, page_text: text,
                    fields: wanted.map(({ el, ids, ...f }) => f) },
       });
       for (const f of wanted) for (const e of f.ids) tried.set(e, sig(f));
@@ -458,11 +492,22 @@
   let fillTimer = null;
   let reviewTimer = null;
   let lastHref = location.href;
+  const watched = new WeakSet();
+  function observeAll() {
+    if (!observer) return;
+    for (const r of roots()) {
+      if (watched.has(r)) continue;
+      watched.add(r);
+      // characterData: React often keeps the same boxes and only changes the question text
+      observer.observe(r === document ? document.body : r, { childList: true, subtree: true, characterData: true });
+    }
+  }
   function checkForNewStep() {
     clearTimeout(fillTimer);
     fillTimer = setTimeout(() => {
       if (location.href !== lastHref) lastHref = location.href; // a step change in a single-page form
-      if (collect().some(isFresh) || SUCCESS.test(document.body?.innerText || "")) fill(false);
+      observeAll();
+      if (collect().some(isFresh) || SUCCESS.test(pageText())) fill(false);
       else review();
     }, 1000);
   }
@@ -472,8 +517,7 @@
       if (muts.every((m) => (m.target.nodeType === 1 ? m.target : m.target.parentElement)?.closest?.("#fwai-panel-host"))) return;
       checkForNewStep();
     });
-    // characterData: React often keeps the same boxes and only changes the question text
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observeAll();
     window.addEventListener("popstate", checkForNewStep);
     window.addEventListener("hashchange", checkForNewStep);
     // the user's own typing (and ours) only re-checks what's left; it never delays spotting a new step
