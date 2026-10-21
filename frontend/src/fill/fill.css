@@ -1,0 +1,94 @@
+/* Fill with AI: same tokens as Job Watcher (styles.css), its own layout. */
+@import "../styles.css";
+
+body { background: var(--bg); }
+.f-muted { color: var(--muted); }
+.small { font-size: 13px; }
+.f-ok { color: var(--accent); }
+.f-error { color: var(--danger); margin: 8px 0 0; }
+.f-loading { display: grid; place-items: center; min-height: 60vh; color: var(--muted); }
+code, kbd { font-family: var(--mono); font-size: 0.85em; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
+
+.f-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+.f-card h2 { margin: 0 0 4px; font-size: 18px; }
+.f-card > p.f-muted { margin: 0 0 14px; }
+
+button.f-primary, a.f-button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 9px; padding: 9px 16px; font-weight: 600; text-decoration: none; display: inline-block; cursor: pointer; }
+button.f-primary:disabled { opacity: 0.5; cursor: default; }
+button.f-danger { background: var(--danger); color: #fff; border: 0; }
+.f-link, .f-link-danger { background: none; border: 0; padding: 4px 0; color: var(--accent); text-decoration: underline; }
+.f-link-danger { color: var(--danger); }
+.f-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* sign up / log in */
+.f-auth { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; max-width: 980px; margin: 0 auto; padding: 32px 16px; }
+.f-hero h1 { font-size: 40px; margin: 12px 0; letter-spacing: -0.02em; }
+.f-hero p { font-size: 16px; color: var(--muted); max-width: 46ch; }
+.f-hero ul { padding-left: 18px; color: var(--muted); }
+.f-hero li { margin: 6px 0; }
+.f-logo { width: 48px; height: 48px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 24px; }
+.f-logo.sm { width: 28px; height: 28px; font-size: 15px; border-radius: 8px; }
+.f-auth-form { display: grid; gap: 12px; }
+.f-tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg); border-radius: 10px; padding: 4px; }
+.f-tabs button { border: 0; background: none; padding: 8px; border-radius: 8px; font-weight: 600; color: var(--muted); }
+.f-tabs button.on { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+
+/* fields */
+.f-field { display: grid; gap: 5px; }
+.f-field label { font-weight: 600; font-size: 13px; }
+.f-field small { color: var(--muted); font-size: 12px; }
+.f-field input, .f-field select, .f-field textarea { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; font: inherit; color: inherit; }
+.f-field textarea { resize: vertical; }
+.f-field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.f-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.f-wide { grid-column: 1 / -1; }
+
+/* app layout */
+.f-top { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.f-brand { display: flex; gap: 10px; align-items: center; font-weight: 700; font-size: 16px; }
+.f-top-right { display: flex; gap: 12px; align-items: center; }
+.f-layout { display: grid; grid-template-columns: 240px 1fr; gap: 24px; max-width: 1100px; margin: 0 auto; padding: 24px 16px 120px; }
+.f-side { position: sticky; top: 76px; align-self: start; display: grid; gap: 14px; }
+.f-nav { display: grid; }
+.f-nav a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 8px; }
+.f-nav a:hover { background: var(--surface); color: var(--fg); }
+.f-main { display: grid; gap: 16px; min-width: 0; }
+.f-main section { scroll-margin-top: 80px; }
+.f-meter { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; margin: 8px 0; }
+.f-meter div { height: 100%; background: var(--accent); transition: width 0.3s; }
+
+/* lists */
+.f-list { display: grid; gap: 12px; justify-items: start; }
+.f-list-item { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 6px; justify-items: end; }
+.f-list-item .f-grid { width: 100%; }
+
+/* resume */
+.f-drop { border: 2px dashed var(--line); border-radius: 12px; padding: 28px; text-align: center; cursor: pointer; color: var(--muted); }
+.f-drop:hover, .f-drop.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
+
+/* extension */
+.f-steps { margin: 0; padding-left: 22px; display: grid; gap: 14px; }
+.f-steps p { margin: 4px 0 8px; color: var(--muted); }
+.f-key { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; background: var(--accent-soft); padding: 12px; border-radius: 10px; }
+.f-key code { word-break: break-all; background: var(--surface); }
+.f-key small { grid-column: 1 / -1; color: var(--muted); }
+.f-keys { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; font-size: 13px; }
+.f-keys li { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }
+
+.f-danger-zone h2 { color: var(--danger); }
+
+/* save bar */
+.f-savebar { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 120px); display: flex; gap: 16px; align-items: center; background: var(--fg); color: var(--bg); padding: 10px 12px 10px 18px; border-radius: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / 0.2); transition: transform 0.2s; z-index: 20; max-width: calc(100vw - 32px); }
+.f-savebar { visibility: hidden; }
+.f-savebar.show { transform: translate(-50%, 0); visibility: visible; }
+
+@media (max-width: 760px) {
+  .f-auth { grid-template-columns: 1fr; gap: 20px; }
+  .f-hero h1 { font-size: 30px; }
+  .f-layout { grid-template-columns: 1fr; padding-top: 12px; }
+  .f-side { position: static; }
+  .f-nav { display: flex; overflow-x: auto; gap: 4px; }
+  .f-nav a { white-space: nowrap; }
+  .f-top { padding: 10px 16px; }
+  .f-top-right .f-muted { display: none; }
+}

@@ -35,8 +35,9 @@ GROQ_MODEL = os.environ.get("JOB_WATCHER_APPLY_AI_MODEL", "openai/gpt-oss-120b")
 KEYS_PATH = Path(os.environ.get("JOB_WATCHER_APPLY_KEYS", HOME / "Desktop/Python/autoapply/.env"))
 
 
-def resume_name() -> str:
-    return RESUME_PATH.name.removesuffix(".b64")
+def resume_name_local() -> str:
+    """The local resume file's name, or "" if there isn't one."""
+    return RESUME_PATH.name.removesuffix(".b64") if RESUME_PATH.is_file() else ""
 
 
 def resume_bytes() -> bytes | None:
@@ -148,12 +149,33 @@ def load_profile(path: Path = PROFILE_PATH) -> Profile:
     )
 
 
-def profile_gaps(p: Profile) -> list[str]:
+def profile_from_dict(d: dict) -> Profile:
+    """A profile entered on the Fill with AI website (one per user)."""
+    personal, work, elig = d.get("personal") or {}, d.get("work") or {}, d.get("eligibility") or {}
+    t = lambda section, key, default="": _text(section.get(key)) or default  # noqa: E731
+    skills = [s.strip() for s in str(d.get("skills") or "").replace("\n", ",").split(",") if s.strip()]
+    answers = {_text(a.get("question")): _text(a.get("answer")) for a in d.get("answers") or [] if _text(a.get("question"))}
+    return Profile(
+        first_name=t(personal, "first_name"), last_name=t(personal, "last_name"), email=t(personal, "email"),
+        phone=t(personal, "phone"), city=t(personal, "city"), state=t(personal, "state"), country=t(personal, "country"),
+        zip=t(personal, "zip"), linkedin=t(personal, "linkedin"), github=t(personal, "github"), portfolio=t(personal, "portfolio"),
+        summary=_text(d.get("summary")), years=t(work, "years"), current_title=t(work, "current_title"),
+        current_company=t(work, "current_company"), current_salary=t(work, "current_salary"),
+        desired_salary=t(work, "desired_salary"), notice_period=t(work, "notice_period"), availability=t(work, "availability"),
+        work_authorization=t(elig, "work_authorization", "Yes"), require_sponsorship=t(elig, "require_sponsorship", "No"),
+        can_relocate=t(elig, "can_relocate", "Yes"), willing_to_travel=t(elig, "willing_to_travel"),
+        remote_preference=t(elig, "remote_preference"), skills=skills,
+        education=[e for e in d.get("education") or [] if isinstance(e, dict)],
+        history=[h for h in d.get("history") or [] if isinstance(h, dict)], custom_answers=answers,
+    )
+
+
+def profile_gaps(p: Profile, has_resume: bool | None = None) -> list[str]:
     """Details many forms require that the profile doesn't have."""
     wanted = {"first name": p.first_name, "last name": p.last_name, "email": p.email, "phone": p.phone,
               "city": p.city, "LinkedIn URL": p.linkedin}
     gaps = [k for k, v in wanted.items() if not v]
-    if not RESUME_PATH.is_file():
+    if not (RESUME_PATH.is_file() if has_resume is None else has_resume):
         gaps.append("resume PDF")
     return gaps
 
@@ -269,14 +291,18 @@ def ai_answer(profile: Profile, question: str, job: str, page_text: str, options
 URLISH = re.compile(r"url|link|website|profile\b|github|linkedin|portfolio", re.I)
 
 
-def decide(fields: list[dict], job: str = "", page_text: str = "", profile: Profile | None = None) -> dict:
+def decide(fields: list[dict], job: str = "", page_text: str = "", profile: Profile | None = None,
+           resume_name: str | None = None) -> dict:
     """What to put in each field of one page.
 
     fields: [{id, kind (text|email|tel|number|url|textarea|select|combobox|radio|checkbox|file|date),
               label, options, required, value}]
     returns {"answers": [{id, value, source}], "missing": [label]}; source is "profile", "ai" or "resume".
+    resume_name: the user's resume file name ("" = none); None = the local resume file, if any.
     """
     profile = profile or load_profile()
+    if resume_name is None:
+        resume_name = resume_name_local()
     answers: list[dict] = []
     missing: list[str] = []
     ask_ai: list[tuple[dict, list[str] | None]] = []
@@ -289,8 +315,8 @@ def decide(fields: list[dict], job: str = "", page_text: str = "", profile: Prof
         if kind == "file":
             words = label + " " + (f.get("name") or "")
             if re.search(r"resume|\bcv\b|curriculum|autofill", words, re.I) or (required and not re.search(r"cover|photo|transcript", words, re.I)):
-                if RESUME_PATH.is_file():
-                    answers.append({"id": f["id"], "value": resume_name(), "source": "resume"})
+                if resume_name:
+                    answers.append({"id": f["id"], "value": resume_name, "source": "resume"})
                 elif required:
                     missing.append(label or "Resume")
             continue
@@ -338,5 +364,5 @@ def status() -> dict:
         prof = {"loaded": True, "name": p.full_name, "email": p.email, "gaps": profile_gaps(p)}
     except Exception as exc:
         prof = {"loaded": False, "error": str(exc)[:200], "gaps": []}
-    return {"profile": prof, "resume": resume_name() if RESUME_PATH.is_file() else None,
+    return {"profile": prof, "resume": resume_name_local() or None,
             "ai": bool(groq_key()), "ai_model": GROQ_MODEL}

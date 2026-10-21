@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
-from . import autofill, backup, db, monitor
+from . import accounts, autofill, backup, db, fill_api, monitor
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -54,6 +54,7 @@ async def _keep_awake(stop: asyncio.Event) -> None:
 async def lifespan(app: FastAPI):
     await asyncio.to_thread(backup.restore)
     db.init()
+    accounts.init()
     stop = asyncio.Event()
     tasks = [asyncio.create_task(monitor.run_forever(stop)), asyncio.create_task(backup.run_forever(stop)),
              asyncio.create_task(_keep_awake(stop))]
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Job Watcher", lifespan=lifespan)
+app.include_router(fill_api.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -77,7 +79,9 @@ PASSWORD = os.environ.get("JOB_WATCHER_PASSWORD", "")
 
 @app.middleware("http")
 async def require_password(request: Request, call_next):
-    if not PASSWORD or request.url.path == "/api/health":
+    # /fill and its API have their own per-user accounts (Fill with AI)
+    path = request.url.path
+    if not PASSWORD or path == "/api/health" or path.startswith(("/fill", "/api/fill/", "/assets/")):
         return await call_next(request)
     auth = request.headers.get("authorization", "")
     if auth.startswith("Basic "):
@@ -373,7 +377,7 @@ def autofill_resume() -> Response:
     if data is None:
         raise HTTPException(404, f"No resume at {autofill.RESUME_PATH}")
     return Response(data, media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="{autofill.resume_name()}"'})
+                    headers={"Content-Disposition": f'attachment; filename="{autofill.resume_name_local()}"'})
 
 
 # ── Website ──────────────────────────────────────────────────────────────────

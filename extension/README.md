@@ -28,3 +28,9 @@ picked; if none appears, the field says "pick a suggestion".
 
 Fields it fills get a green outline; ones that need you get a yellow one, and the first is scrolled
 into view. Problems show in the page's developer console as "Fill with AI: …".
+
+## Many users
+
+On a hosted Job Watcher, anyone can open **/fill**, create an account, enter their details, upload
+their resume, download this extension (already pointed at that site) and create an extension key.
+The key goes in the extension's Options; each person's extension fills forms with their own profile.

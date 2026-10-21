@@ -1,10 +1,15 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Fill with AI · settings</title>
-<style>body{font:14px system-ui;margin:24px;max-width:520px;color:#16161d}input{width:100%;padding:8px;border:1px solid #ccc;border-radius:8px;font:inherit}
-button{margin-top:10px;padding:8px 14px;border:0;border-radius:8px;background:#5b4fe9;color:#fff;font:inherit;cursor:pointer}#out{margin-top:14px;white-space:pre-wrap}</style></head>
+<style>body{font:14px system-ui;margin:24px;max-width:540px;color:#1d211c}input{width:100%;padding:9px;border:1px solid #ccc;border-radius:8px;font:inherit;box-sizing:border-box}
+label{display:block;margin:12px 0}button{margin-top:6px;padding:9px 16px;border:0;border-radius:8px;background:#2f6b3a;color:#fff;font:inherit;cursor:pointer}
+#out{margin-top:14px;white-space:pre-wrap;padding:10px;border-radius:8px;background:#f3f4f1}details{margin-top:16px;color:#687064}a{color:#2f6b3a}</style></head>
 <body><h2>Fill with AI</h2>
-<label>Job Watcher address<br><input id="server" placeholder="https://job-watcher-w5jm.onrender.com"></label>
-<p><label>Site password (for the hosted Job Watcher; leave empty for your local one)<br><input id="password" type="password" autocomplete="off"></label></p>
+<p>Paste the extension key from your <a id="site" target="_blank">Fill with AI page</a>.</p>
+<label>Extension key<input id="key" placeholder="fk_…" autocomplete="off" spellcheck="false"></label>
+<details><summary>Advanced</summary>
+<label>Server address<input id="server"></label>
+<label>Site password (only for the single-user setup without a key)<input id="password" type="password" autocomplete="off"></label>
+</details>
 <button id="save">Save and test</button>
-<div id="out"></div>
+<div id="out" hidden></div>
 <script src="options.js"></script></body></html>

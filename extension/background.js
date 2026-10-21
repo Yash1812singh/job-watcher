@@ -1,11 +1,14 @@
 // Click the toolbar button (or Alt+Shift+F) on an application page: fill it. Click again on the next page.
 const DEFAULT_SERVER = "https://job-watcher-w5jm.onrender.com";
 
+// With an extension key (from the Fill with AI page) it fills with that person's profile and resume.
+// Without one it uses the single-user setup (Job Watcher's own profile file and site password).
 async function server() {
-  const { server, password } = await chrome.storage.sync.get({ server: DEFAULT_SERVER, password: "" });
-  // the hosted Job Watcher asks for its site password (any username)
+  const { server, key, password } = await chrome.storage.sync.get({ server: DEFAULT_SERVER, key: "", password: "" });
+  const base = server.replace(/\/+$/, "");
+  if (key) return { base, headers: { Authorization: `Bearer ${key}` }, decide: "/api/fill/decide", resume: "/api/fill/resume-file" };
   const headers = password ? { Authorization: "Basic " + btoa("me:" + password) } : {};
-  return { base: server.replace(/\/+$/, ""), headers };
+  return { base, headers, decide: "/api/autofill", resume: "/api/autofill/resume" };
 }
 
 chrome.action.onClicked.addListener(async (tab) => {
@@ -17,19 +20,19 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
-// The page asks; the extension (not the page) talks to your local server, so no site sees it.
+// The page asks; the extension (not the page) talks to the server, so no site sees your key.
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (async () => {
-    const { base, headers } = await server();
+    const s = await server();
     try {
       if (msg.type === "decide") {
-        const r = await fetch(`${base}/api/autofill`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(msg.payload) });
-        if (r.status === 401) throw new Error("wrong password (set it in the extension's Options)");
+        const r = await fetch(s.base + s.decide, { method: "POST", headers: { ...s.headers, "Content-Type": "application/json" }, body: JSON.stringify(msg.payload) });
+        if (r.status === 401) throw new Error("your extension key isn't valid. Open the extension's Options and paste a key from the Fill with AI page");
         if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
         reply({ ok: true, data: await r.json() });
       } else if (msg.type === "resume") {
-        const r = await fetch(`${base}/api/autofill/resume`, { headers });
-        if (!r.ok) throw new Error(`No resume (${r.status})`);
+        const r = await fetch(s.base + s.resume, { headers: s.headers });
+        if (!r.ok) throw new Error(r.status === 404 ? "no resume uploaded yet" : `couldn't get your resume (${r.status})`);
         const name = (r.headers.get("content-disposition") || "").match(/filename="?([^";]+)/)?.[1] || "resume.pdf";
         const bytes = new Uint8Array(await r.arrayBuffer());
         let bin = "";
@@ -37,7 +40,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         reply({ ok: true, data: { name, b64: btoa(bin) } });
       }
     } catch (e) {
-      reply({ ok: false, error: `Can't reach Job Watcher at ${base}: ${e.message}. Is it running?` });
+      reply({ ok: false, error: `Fill with AI (${s.base}): ${e.message}.` });
     }
   })();
   return true; // reply comes later

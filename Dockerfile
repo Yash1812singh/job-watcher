@@ -23,6 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt playwright==1.49.1 huggingfac
 # Hosts like Hugging Face Spaces run the container as a non-root user.
 RUN mkdir -p /data && chmod 777 /data
 COPY backend/app ./app
+# the Fill with AI extension, offered as a download on /fill
+COPY extension /app/extension
 COPY --from=web /web/dist /app/frontend/dist
 VOLUME /data
 EXPOSE 8090
