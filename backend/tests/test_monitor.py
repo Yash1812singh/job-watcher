@@ -130,7 +130,8 @@ def test_due_sites_respect_interval(site_id, monkeypatch):
     assert monitor.due_site_ids() == []                 # checked just now
 
 
-def test_most_overdue_sites_are_checked_first(site_id):
+def test_most_overdue_sites_are_checked_first(site_id, monkeypatch):
+    monkeypatch.setattr(monitor, "FASTEST_MINUTES", 1)   # every interval as set, as on a bigger server
     now = datetime.now(timezone.utc)
     with db.connect() as conn:
         conn.execute("UPDATE sites SET interval_minutes = 5, last_checked_at = ? WHERE id = ?",
@@ -212,6 +213,7 @@ def _pace_of(site_id):
 
 
 def test_companies_are_checked_as_often_as_they_are_worth(site_id, monkeypatch):
+    monkeypatch.setattr(monitor, "FASTEST_MINUTES", 1)
     with db.connect() as conn:
         conn.execute("UPDATE sites SET interval_minutes = 2 WHERE id = ?", (site_id,))
     _scan_returns(monkeypatch, Job("1", "Account Executive", "u1", location="New York"))
@@ -274,3 +276,23 @@ def test_due_companies_use_their_pace_and_the_backlog_is_reported(site_id, monke
     assert monitor.due_site_ids() == [site_id]
     status = monitor.checker_status()
     assert (status["companies"], status["overdue"]) == (1, 1) and 29 <= status["most_overdue_minutes"] <= 31
+
+
+def test_the_free_server_checks_no_company_more_often_than_every_5_minutes(site_id, monkeypatch):
+    with db.connect() as conn:
+        conn.execute("UPDATE sites SET interval_minutes = 2 WHERE id = ?", (site_id,))
+    _scan_returns(monkeypatch, Job("1", "Backend Engineer", "u1", location="Pune, India", posted_at=_minutes_ago(10)))
+    monitor.scan_site(site_id)
+    assert _pace_of(site_id)[0] == monitor.FASTEST_MINUTES == 5
+
+
+def test_companies_never_checked_get_their_turn_even_with_a_backlog(site_id):
+    now = datetime.now(timezone.utc)
+    with db.connect() as conn:
+        # added 2 hours ago at 5 minutes, never checked: 24 intervals behind
+        conn.execute("UPDATE sites SET interval_minutes = 5, created_at = ? WHERE id = ?", (db.to_iso(now - timedelta(hours=2)), site_id))
+        busy = conn.execute("INSERT INTO sites (url, name, created_at, interval_minutes, last_checked_at) VALUES ('https://b.com/jobs', 'b', ?, 5, ?)",
+                            (db.now_iso(), db.to_iso(now - timedelta(minutes=30)))).lastrowid
+        fresh = conn.execute("INSERT INTO sites (url, name, created_at, interval_minutes) VALUES ('https://c.com/jobs', 'c', ?, 5)",
+                             (db.now_iso(),)).lastrowid
+    assert monitor.due_site_ids() == [site_id, busy, fresh]   # waiting longest first; just added last

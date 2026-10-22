@@ -48,6 +48,9 @@ _backlog: dict = {"companies": 0, "overdue": 0, "most_overdue_minutes": 0}
 #   none                                                  -> every COLD_MINUTES
 #   failing                                               -> twice as long after each failure, up to MAX_BACKOFF_MINUTES
 WARM_MINUTES = int(os.environ.get("JOB_WATCHER_WARM_MINUTES", "15"))
+# the fastest any company is checked, whatever its interval says (a 2-minute check costs much and
+# gains little when jobs show for 30 minutes); 1 on a bigger server keeps every interval as set
+FASTEST_MINUTES = int(os.environ.get("JOB_WATCHER_FASTEST_MINUTES", "5"))
 COLD_MINUTES = int(os.environ.get("JOB_WATCHER_COLD_MINUTES", "60"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("JOB_WATCHER_MAX_BACKOFF_MINUTES", "360"))
 RECENT_DAYS = 7
@@ -62,7 +65,7 @@ def pace(conn, site_id: int) -> int:
         """SELECT COALESCE(MAX(is_active), 0) AS open, COALESCE(MAX(fresh_at >= ?), 0) AS lately
            FROM jobs WHERE site_id = ? AND is_india = 1 AND is_tech = 1""", (recent, site_id)).fetchone()
     if row["lately"]:
-        return chosen
+        return max(chosen, FASTEST_MINUTES)
     return max(chosen, WARM_MINUTES if row["open"] else COLD_MINUTES)
 
 
@@ -219,15 +222,17 @@ def _method_family(method: str | None) -> str | None:
 def due_site_ids() -> list[int]:
     now = datetime.now(timezone.utc)
     with db.connect() as conn:
-        rows = conn.execute("SELECT id, COALESCE(effective_interval, interval_minutes) AS interval_minutes, last_checked_at FROM sites").fetchall()
+        rows = conn.execute("""SELECT id, COALESCE(effective_interval, MAX(interval_minutes, ?)) AS interval_minutes,
+                                      last_checked_at, created_at FROM sites""", (FASTEST_MINUTES,)).fetchall()
     due = []
     worst = 0.0
     for r in rows:
         last = r["last_checked_at"]
         if last is None:
-            # a company never checked takes its turn like one that's just due: adding hundreds at
-            # once mustn't hold up the companies already being watched
-            due.append((1.0, r["id"]))
+            # a company never checked waits its turn from when it was added, like one that was due
+            # then: adding hundreds at once neither holds up the others nor leaves them never checked
+            waited = (now - datetime.fromisoformat(r["created_at"])) / timedelta(minutes=r["interval_minutes"])
+            due.append((max(waited, 1.0), r["id"]))
             continue
         waited = (now - datetime.fromisoformat(last)) / timedelta(minutes=r["interval_minutes"])
         if waited >= 1:

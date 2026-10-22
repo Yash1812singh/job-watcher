@@ -182,7 +182,10 @@ function CompanyRow({ site, windowMins, selected, scanning, onSelect, onScan, on
           {site.effective_interval && site.effective_interval > site.interval_minutes ? (
             <>
               <span className="sep">·</span>
-              every {durationLabel(site.effective_interval)} for now ({site.error_streak ? "its page keeps failing" : "no tech jobs in India"})
+              every {durationLabel(site.effective_interval)} for now ({site.error_streak ? "its page keeps failing"
+                : site.effective_interval >= 60 ? "no tech jobs in India"
+                : site.effective_interval >= 15 ? "no new tech jobs in India this week"
+                : "the fastest on the free server"})
             </>
           ) : null}
           {site.last_method && status === "ok" ? <><span className="sep">·</span>{methodLabel(site.last_method)}</> : null}
