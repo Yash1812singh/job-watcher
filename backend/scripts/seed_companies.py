@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.classify import is_india, is_tech  # noqa: E402
+from app import more_ats  # noqa: E402
 from app.scraper import ScanError, detect_ats, scan  # noqa: E402
 
 WORKDAY_SERVERS = ["wd1", "wd3", "wd5", "wd12", "wd103", "wd108"]
@@ -37,7 +38,7 @@ API = os.environ.get("JOB_WATCHER_API", "http://127.0.0.1:8090/api").rstrip("/")
 AUTH = ("me", os.environ["JOB_WATCHER_PASSWORD"]) if os.environ.get("JOB_WATCHER_PASSWORD") else None
 # Hosted job boards give exact posting times, so a 2-minute check still shows the true
 # "posted N min ago". Pages read through the browser are heavier, so they're checked less often.
-INTERVAL_BOARD, INTERVAL_PAGE, INTERVAL_BROWSER = 2, 2, 5
+INTERVAL_BOARD, INTERVAL_PAGE, INTERVAL_BROWSER = 5, 5, 10
 TECH_ONLY = False
 
 
@@ -75,7 +76,7 @@ def interval_for(method: str) -> int:
     if method.endswith("(rendered)"):
         return INTERVAL_BROWSER
     return INTERVAL_BOARD if method in ("greenhouse", "lever", "ashby", "workable", "smartrecruiters",
-                                        "workday", "amazon", "eightfold") else INTERVAL_PAGE
+                                        "workday", "amazon", "eightfold", *more_ats.TOOLS) else INTERVAL_PAGE
 
 
 def main() -> None:

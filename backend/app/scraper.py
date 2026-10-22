@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from urllib.parse import parse_qsl, urldefrag, urljoin, urlparse
 
 import httpx
+
+from . import more_ats
 from bs4 import BeautifulSoup
 
 USER_AGENT = "Mozilla/5.0 (compatible; JobWatcher/0.1; personal job tracker)"
@@ -86,7 +88,7 @@ def detect_ats(text: str) -> tuple[str, str] | None:
             token = match.group(1).strip(".")
             if token and token.lower() not in _NOT_A_BOARD:
                 return name, token
-    return None
+    return more_ats.detect(text)  # Keka, Darwinbox, Zoho Recruit, Freshteam, …
 
 
 ASHBY_QUERY = """query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
@@ -136,8 +138,13 @@ def place(locations: list[str | None], country: str | None = None, remote: bool 
     """One location text from everything a board says about where a job is: all its places (a job
     listed as "Dubai" can also be open in Noida), its country when the places don't name it
     ("Remote" + IN), and "Remote" for remote jobs, so a remote job in India counts as one."""
+    from .classify import is_india
     places = list(dict.fromkeys(p.strip() for p in locations if p and p.strip()))
     text = " / ".join(places)
+    if len(places) > 5:  # a job open in 140 cities: the first few, and India if it's among the rest
+        text = " / ".join(places[:3]) + f" +{len(places) - 3} more"
+        if any(is_india(p) for p in places) and not is_india(text):
+            text += ", India"
     country = (country or "").strip()
     country = COUNTRY_NAMES.get(country.lower(), country)
     if country and country.lower() not in text.lower() and len(country) > 2:
@@ -148,6 +155,8 @@ def place(locations: list[str | None], country: str | None = None, remote: bool 
 
 
 def fetch_ats_jobs(client: httpx.Client, ats: str, token: str, page_url: str = "") -> list[Job]:
+    if ats in more_ats.TOOLS:
+        return more_ats.fetch(client, ats, token)
     if ats == "greenhouse":
         data = _get_json(client, f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs")
         return [
