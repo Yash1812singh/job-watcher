@@ -225,14 +225,26 @@ def test_companies_are_checked_as_often_as_they_are_worth(site_id, monkeypatch):
     _scan_returns(monkeypatch, Job("2", "Account Executive", "u2", location="Mumbai, India"),
                   Job("3", "Backend Engineer", "u3", location="Bengaluru, India"))
     monitor.scan_site(site_id)
-    assert _pace_of(site_id)[0] == 2                                  # tech job in India: as often as it can
+    assert _pace_of(site_id)[0] == 2                                  # new tech job in India: as often as it can
+
+    _scan_returns(monkeypatch, Job("2", "Account Executive", "u2", location="Mumbai, India"),
+                  Job("3", "Backend Engineer", "u3", location="Bengaluru, India"),
+                  Job("4", "Data Engineer", "u4", location="Pune, India", posted_at=_minutes_ago(60 * 24 * 30)))
+    with db.connect() as conn:                                        # …the new one was a month ago now
+        conn.execute("UPDATE jobs SET fresh_at = ? WHERE external_id = '3'", (_minutes_ago(60 * 24 * 30),))
+    monitor.scan_site(site_id)
+    assert _pace_of(site_id)[0] == monitor.WARM_MINUTES               # still open, nothing new lately
+    _scan_returns(monkeypatch, Job("2", "Account Executive", "u2", location="Mumbai, India"),
+                  Job("3", "Backend Engineer", "u3", location="Bengaluru, India"))
+    with db.connect() as conn:
+        conn.execute("UPDATE jobs SET fresh_at = ? WHERE external_id = '3'", (_minutes_ago(5),))
 
     _scan_returns(monkeypatch, Job("2", "Account Executive", "u2", location="Mumbai, India"))
     monitor.scan_site(site_id)
     assert _pace_of(site_id)[0] == 2                                  # it closed, but was posted lately: keep watching
 
     with db.connect() as conn:                                        # …two weeks on, no tech hiring in India
-        conn.execute("UPDATE jobs SET first_seen_at = ?", (_minutes_ago(60 * 24 * 15),))
+        conn.execute("UPDATE jobs SET fresh_at = ?", (_minutes_ago(60 * 24 * 15),))
     monitor.scan_site(site_id)
     assert _pace_of(site_id)[0] == monitor.COLD_MINUTES
 
@@ -246,9 +258,9 @@ def test_a_failing_company_is_checked_less_and_less_until_it_works(site_id, monk
         monitor.scan_site(site_id)
         seen.append(_pace_of(site_id)[0])
     assert seen == [10, 20, 40, 80, 160, 320, 360, 360]
-    _scan_returns(monkeypatch, Job("1", "Backend Engineer", "u1", location="Pune, India"))
+    _scan_returns(monkeypatch, Job("1", "Backend Engineer", "u1", location="Pune, India", posted_at=_minutes_ago(30)))
     monitor.scan_site(site_id)
-    assert _pace_of(site_id) == (5, 0)
+    assert _pace_of(site_id) == (5, 0)                                # works again, and hiring: back to its interval
 
 
 def test_due_companies_use_their_pace_and_the_backlog_is_reported(site_id, monkeypatch):

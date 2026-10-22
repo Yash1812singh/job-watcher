@@ -43,22 +43,27 @@ _backlog: dict = {"companies": 0, "overdue": 0, "most_overdue_minutes": 0}
 # One free server can't check thousands of companies every couple of minutes, so each company is
 # checked as often as it's worth (its own interval is the fastest it goes). Only tech hiring in
 # India matters here:
-#   tech jobs in India open, or one posted there lately   -> its interval
+#   a tech job in India posted in the last RECENT_DAYS     -> its interval (actively hiring)
+#   tech jobs open in India, none posted lately            -> every WARM_MINUTES (still inside the 30-minute window)
 #   none                                                  -> every COLD_MINUTES
 #   failing                                               -> twice as long after each failure, up to MAX_BACKOFF_MINUTES
+WARM_MINUTES = int(os.environ.get("JOB_WATCHER_WARM_MINUTES", "15"))
 COLD_MINUTES = int(os.environ.get("JOB_WATCHER_COLD_MINUTES", "60"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("JOB_WATCHER_MAX_BACKOFF_MINUTES", "360"))
-RECENT_DAYS = 14
+RECENT_DAYS = 7
 
 
 def pace(conn, site_id: int) -> int:
     """How often to check a company that was just checked successfully, from what it's hiring for."""
     chosen = conn.execute("SELECT interval_minutes FROM sites WHERE id = ?", (site_id,)).fetchone()["interval_minutes"]
-    hiring = conn.execute(
-        """SELECT 1 FROM jobs WHERE site_id = ? AND is_india = 1 AND is_tech = 1
-                  AND (is_active = 1 OR (is_baseline = 0 AND first_seen_at >= ?)) LIMIT 1""",
-        (site_id, db.to_iso(datetime.now(timezone.utc) - timedelta(days=RECENT_DAYS)))).fetchone()
-    return chosen if hiring else max(chosen, COLD_MINUTES)
+    recent = db.to_iso(datetime.now(timezone.utc) - timedelta(days=RECENT_DAYS))
+    # fresh_at: when it was posted (exact time from the site) or first seen after the company was added
+    row = conn.execute(
+        """SELECT COALESCE(MAX(is_active), 0) AS open, COALESCE(MAX(fresh_at >= ?), 0) AS lately
+           FROM jobs WHERE site_id = ? AND is_india = 1 AND is_tech = 1""", (recent, site_id)).fetchone()
+    if row["lately"]:
+        return chosen
+    return max(chosen, WARM_MINUTES if row["open"] else COLD_MINUTES)
 
 
 def _failed(conn, site_id: int, checked_at: str, error: str) -> None:
