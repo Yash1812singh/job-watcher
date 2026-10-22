@@ -262,7 +262,7 @@ def test_a_failing_company_is_checked_less_and_less_until_it_works(site_id, monk
     assert seen == [10, 20, 40, 80, 160, 320, 360, 360]
     _scan_returns(monkeypatch, Job("1", "Backend Engineer", "u1", location="Pune, India", posted_at=_minutes_ago(30)))
     monitor.scan_site(site_id)
-    assert _pace_of(site_id) == (5, 0)                                # works again, and hiring: back to its interval
+    assert _pace_of(site_id) == (monitor.FASTEST_MINUTES, 0)          # works again, and hiring: back to full speed
 
 
 def test_due_companies_use_their_pace_and_the_backlog_is_reported(site_id, monkeypatch):
@@ -278,12 +278,12 @@ def test_due_companies_use_their_pace_and_the_backlog_is_reported(site_id, monke
     assert (status["companies"], status["overdue"]) == (1, 1) and 29 <= status["most_overdue_minutes"] <= 31
 
 
-def test_the_free_server_checks_no_company_more_often_than_every_5_minutes(site_id, monkeypatch):
+def test_the_free_server_has_a_fastest_pace(site_id, monkeypatch):
     with db.connect() as conn:
         conn.execute("UPDATE sites SET interval_minutes = 2 WHERE id = ?", (site_id,))
     _scan_returns(monkeypatch, Job("1", "Backend Engineer", "u1", location="Pune, India", posted_at=_minutes_ago(10)))
     monitor.scan_site(site_id)
-    assert _pace_of(site_id)[0] == monitor.FASTEST_MINUTES == 5
+    assert _pace_of(site_id)[0] == monitor.FASTEST_MINUTES == 10
 
 
 def test_companies_never_checked_get_their_turn_even_with_a_backlog(site_id):

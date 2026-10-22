@@ -47,11 +47,11 @@ _backlog: dict = {"companies": 0, "overdue": 0, "most_overdue_minutes": 0}
 #   tech jobs open in India, none posted lately            -> every WARM_MINUTES (still inside the 30-minute window)
 #   none                                                  -> every COLD_MINUTES
 #   failing                                               -> twice as long after each failure, up to MAX_BACKOFF_MINUTES
-WARM_MINUTES = int(os.environ.get("JOB_WATCHER_WARM_MINUTES", "15"))
+WARM_MINUTES = int(os.environ.get("JOB_WATCHER_WARM_MINUTES", "20"))
 # the fastest any company is checked, whatever its interval says (a 2-minute check costs much and
 # gains little when jobs show for 30 minutes); 1 on a bigger server keeps every interval as set
-FASTEST_MINUTES = int(os.environ.get("JOB_WATCHER_FASTEST_MINUTES", "5"))
-COLD_MINUTES = int(os.environ.get("JOB_WATCHER_COLD_MINUTES", "60"))
+FASTEST_MINUTES = int(os.environ.get("JOB_WATCHER_FASTEST_MINUTES", "10"))
+COLD_MINUTES = int(os.environ.get("JOB_WATCHER_COLD_MINUTES", "90"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("JOB_WATCHER_MAX_BACKOFF_MINUTES", "360"))
 RECENT_DAYS = 7
 
