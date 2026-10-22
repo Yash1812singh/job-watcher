@@ -33,7 +33,53 @@ def _progress() -> None:
 
 def checker_status() -> dict:
     stalled_for = time.monotonic() - _last_progress
-    return {"stalled": stalled_for > STALL_SECONDS, "seconds_since_last_check": round(stalled_for), "abandoned_checks": _abandoned}
+    return {"stalled": stalled_for > STALL_SECONDS, "seconds_since_last_check": round(stalled_for), "abandoned_checks": _abandoned,
+            **_backlog}
+
+
+# How far behind schedule the checks are (refreshed by the loop): with too many companies for the
+# server, "overdue" grows and the oldest wait gets long.
+_backlog: dict = {"companies": 0, "overdue": 0, "most_overdue_minutes": 0}
+# One free server can't check thousands of companies every couple of minutes, so each company is
+# checked as often as it's worth (its own interval is the fastest it goes):
+#   hiring for tech roles in India, or posted in India lately   -> its interval
+#   other jobs in India                                          -> every WARM_MINUTES
+#   nothing in India                                             -> every COLD_MINUTES
+#   failing                                                      -> twice as long after each failure, up to MAX_BACKOFF_MINUTES
+WARM_MINUTES = int(os.environ.get("JOB_WATCHER_WARM_MINUTES", "30"))
+COLD_MINUTES = int(os.environ.get("JOB_WATCHER_COLD_MINUTES", "60"))
+MAX_BACKOFF_MINUTES = int(os.environ.get("JOB_WATCHER_MAX_BACKOFF_MINUTES", "360"))
+RECENT_DAYS = 14
+
+
+def pace(conn, site_id: int) -> int:
+    """How often to check a company that was just checked successfully, from what it's hiring for."""
+    chosen = conn.execute("SELECT interval_minutes FROM sites WHERE id = ?", (site_id,)).fetchone()["interval_minutes"]
+    india, india_tech = conn.execute(
+        "SELECT COALESCE(SUM(is_india), 0), COALESCE(SUM(is_india AND is_tech), 0) FROM jobs WHERE site_id = ? AND is_active = 1",
+        (site_id,)).fetchone()
+    if india_tech:
+        return chosen
+    recent = conn.execute(
+        "SELECT 1 FROM jobs WHERE site_id = ? AND is_india = 1 AND is_baseline = 0 AND first_seen_at >= ? LIMIT 1",
+        (site_id, db.to_iso(datetime.now(timezone.utc) - timedelta(days=RECENT_DAYS)))).fetchone()
+    if recent:
+        return chosen
+    return max(chosen, WARM_MINUTES if india else COLD_MINUTES)
+
+
+def _failed(conn, site_id: int, checked_at: str, error: str) -> None:
+    """Record a failed check and wait longer before the next one (twice as long each time in a row)."""
+    row = conn.execute("SELECT interval_minutes, effective_interval, error_streak FROM sites WHERE id = ?", (site_id,)).fetchone()
+    if row is None:
+        return
+    base = row["effective_interval"] or row["interval_minutes"]
+    conn.execute(
+        """UPDATE sites SET last_checked_at = ?, last_status = 'error', last_error = ?, error_streak = ?,
+                  effective_interval = ? WHERE id = ?""",
+        (checked_at, error, row["error_streak"] + 1, min(max(base * 2, row["interval_minutes"]), MAX_BACKOFF_MINUTES), site_id))
+
+
 # companies checked at the same time (browser checks are capped separately); lower it on small servers
 MAX_PARALLEL_SCANS = int(os.environ.get("JOB_WATCHER_MAX_PARALLEL", "24"))
 _site_locks: dict[int, threading.Lock] = {}
@@ -72,18 +118,12 @@ def _scan_site_locked(site_id: int) -> None:
     except ScanError as e:
         log.warning("scan failed site=%s: %s", site_id, e)
         with db.connect() as conn:
-            conn.execute(
-                "UPDATE sites SET last_checked_at = ?, last_status = 'error', last_error = ? WHERE id = ?",
-                (checked_at, str(e), site_id),
-            )
+            _failed(conn, site_id, checked_at, str(e))
         return
     except Exception as e:  # a parsing bug shouldn't kill the monitor loop
         log.exception("unexpected scan error site=%s", site_id)
         with db.connect() as conn:
-            conn.execute(
-                "UPDATE sites SET last_checked_at = ?, last_status = 'error', last_error = ? WHERE id = ?",
-                (checked_at, f"Unexpected error: {e}", site_id),
-            )
+            _failed(conn, site_id, checked_at, f"Unexpected error: {e}")
         return
 
     with db.connect() as conn:
@@ -161,6 +201,7 @@ def _scan_site_locked(site_id: int) -> None:
             (checked_at, "ok" if result.jobs else "empty", result.note, result.method,
              len(seen_now), site_id),
         )
+        conn.execute("UPDATE sites SET error_streak = 0, effective_interval = ? WHERE id = ?", (pace(conn, site_id), site_id))
     log.info("scanned site=%s method=%s jobs=%d new=%d", site_id, result.method, len(seen_now), new_count)
 
 
@@ -180,16 +221,21 @@ def _method_family(method: str | None) -> str | None:
 def due_site_ids() -> list[int]:
     now = datetime.now(timezone.utc)
     with db.connect() as conn:
-        rows = conn.execute("SELECT id, interval_minutes, last_checked_at FROM sites").fetchall()
+        rows = conn.execute("SELECT id, COALESCE(effective_interval, interval_minutes) AS interval_minutes, last_checked_at FROM sites").fetchall()
     due = []
+    worst = 0.0
     for r in rows:
         last = r["last_checked_at"]
         if last is None:
-            due.append((float("inf"), r["id"]))
+            # a company never checked takes its turn like one that's just due: adding hundreds at
+            # once mustn't hold up the companies already being watched
+            due.append((1.0, r["id"]))
             continue
         waited = (now - datetime.fromisoformat(last)) / timedelta(minutes=r["interval_minutes"])
         if waited >= 1:
             due.append((waited, r["id"]))
+            worst = max(worst, (waited - 1) * r["interval_minutes"])
+    _backlog.update(companies=len(rows), overdue=len(due), most_overdue_minutes=round(worst))
     # When there's more to check than time allows, the most overdue go first, relative to
     # their interval: a 2-minute company 6 minutes late is further behind than a 5-minute one.
     return [site_id for _, site_id in sorted(due, key=lambda d: -d[0])]
@@ -221,8 +267,7 @@ async def _check(site_id: int) -> None:
         _abandoned += 1
         log.warning("site=%s: check still running after %ss; moving on (will retry next interval)", site_id, SCAN_TIMEOUT)
         with db.connect() as conn:
-            conn.execute("UPDATE sites SET last_checked_at = ?, last_status = 'error', last_error = ? WHERE id = ?",
-                         (db.now_iso(), f"The site didn't answer within {SCAN_TIMEOUT // 60} minutes; trying again at the next check.", site_id))
+            _failed(conn, site_id, db.now_iso(), f"The site didn't answer within {SCAN_TIMEOUT // 60} minutes; trying again at the next check.")
         _progress()
 
 

@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS sites (
     last_error       TEXT,
     last_method      TEXT,                              -- how jobs were found, e.g. greenhouse, json-ld, links
     last_job_count   INTEGER,
-    baseline_done    INTEGER NOT NULL DEFAULT 0         -- 1 once the jobs already listed when added are recorded
+    baseline_done    INTEGER NOT NULL DEFAULT 0,        -- 1 once the jobs already listed when added are recorded
+    effective_interval INTEGER,                         -- how often it's really checked (monitor.pace); NULL = interval_minutes
+    error_streak     INTEGER NOT NULL DEFAULT 0         -- failed checks in a row
 );
 
 CREATE TABLE IF NOT EXISTS jobs (
@@ -66,6 +68,9 @@ MIGRATIONS = [
     ("jobs", "is_india", "INTEGER NOT NULL DEFAULT 0"),
     ("jobs", "is_tech", "INTEGER NOT NULL DEFAULT 0"),
     ("jobs", "tech_category", "TEXT"),
+    # how often a company is really checked: set after each check (see monitor.pace); NULL = its interval
+    ("sites", "effective_interval", "INTEGER"),
+    ("sites", "error_streak", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 

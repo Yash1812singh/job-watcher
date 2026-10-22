@@ -10,6 +10,7 @@ Companies already being watched (same URL) are skipped. Results are written to
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -29,7 +30,10 @@ ALT_BOARDS = [
     "https://jobs.ashbyhq.com/{token}",
 ]
 
-API = "http://127.0.0.1:8090/api"
+# The Job Watcher to read and add companies to: the local one, or the hosted one with its password
+#   JOB_WATCHER_API=https://<your site>/api JOB_WATCHER_PASSWORD=... .venv/bin/python scripts/...
+API = os.environ.get("JOB_WATCHER_API", "http://127.0.0.1:8090/api").rstrip("/")
+AUTH = ("me", os.environ["JOB_WATCHER_PASSWORD"]) if os.environ.get("JOB_WATCHER_PASSWORD") else None
 # Hosted job boards give exact posting times, so a 2-minute check still shows the true
 # "posted N min ago". Pages read through the browser are heavier, so they're checked less often.
 INTERVAL_BOARD, INTERVAL_PAGE, INTERVAL_BROWSER = 2, 2, 5
@@ -74,9 +78,16 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="check the candidates but don't add them")
     parser.add_argument("--file", default=str(ROOT / "seed" / "candidates.txt"))
     parser.add_argument("--interval", type=int, help="check every N minutes for all added companies")
+    parser.add_argument("--limit", type=int, help="add at most N new companies (in file order), e.g. 500 at a time")
+    parser.add_argument("--skip-watched", action="store_true", help="don't re-check companies already being watched")
     args = parser.parse_args()
 
     candidates = load_candidates(Path(args.file))
+    if args.skip_watched or args.limit:
+        watched_now = {s["url"].lower().rstrip("/") for s in httpx.get(f"{API}/sites", params={"posted_within": 60}, auth=AUTH, timeout=120).json()}
+        candidates = [c for c in candidates if c[1].lower().rstrip("/") not in watched_now]
+    if args.limit:
+        candidates = candidates[: int(args.limit * 1.3)]   # some won't work; check a few extra
     print(f"Checking {len(candidates)} candidate URLs…", flush=True)
     with ThreadPoolExecutor(max_workers=12) as pool:
         results = list(pool.map(check, candidates))
@@ -124,12 +135,14 @@ def main() -> None:
     if args.dry_run:
         return
 
-    with httpx.Client(timeout=30) as api:
-        watched = {s["url"] for s in api.get(f"{API}/sites").json()}
+    with httpx.Client(timeout=120, auth=AUTH) as api:
+        watched = {s["url"] for s in api.get(f"{API}/sites", params={"posted_within": 60}).json()}
         added = 0
         for r in working:
             if r["url"] in watched:
                 continue
+            if args.limit and added >= args.limit:
+                break
             res = api.post(f"{API}/sites", json={
                 "url": r["url"], "name": r["name"], "interval_minutes": args.interval or interval_for(r["method"]),
                 "scan_now": False,   # the scheduler picks them up, a few at a time
@@ -138,7 +151,7 @@ def main() -> None:
                 added += 1
             elif res.status_code != 409:
                 print(f"  couldn't add {r['name']}: {res.status_code} {res.text[:120]}")
-    print(f"Added {added} new companies; {len(working) - added} were already being watched.")
+    print(f"Added {added} new companies.")
 
 
 if __name__ == "__main__":

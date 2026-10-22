@@ -12,6 +12,7 @@ Boards already being watched are skipped.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 import time
@@ -26,7 +27,10 @@ sys.path.insert(0, str(ROOT))
 from app.classify import is_india, is_tech  # noqa: E402
 from app.scraper import ScanError, detect_ats, scan  # noqa: E402
 
-API = "http://127.0.0.1:8090/api"
+# The Job Watcher to read and add companies to: the local one, or the hosted one with its password
+#   JOB_WATCHER_API=https://<your site>/api JOB_WATCHER_PASSWORD=... .venv/bin/python scripts/...
+API = os.environ.get("JOB_WATCHER_API", "http://127.0.0.1:8090/api").rstrip("/")
+AUTH = ("me", os.environ["JOB_WATCHER_PASSWORD"]) if os.environ.get("JOB_WATCHER_PASSWORD") else None
 
 
 def company_name(client: httpx.Client, url: str) -> str:
@@ -66,7 +70,7 @@ def main() -> None:
 
     boards = [l.strip() for l in Path(args.file).read_text().splitlines() if l.strip() and not l.startswith("#")]
     try:
-        watched = {s["url"].lower().rstrip("/") for s in httpx.get(f"{API}/sites", timeout=60).json()}
+        watched = {s["url"].lower().rstrip("/") for s in httpx.get(f"{API}/sites", params={"posted_within": 60}, auth=AUTH, timeout=120).json()}
     except httpx.HTTPError:
         watched = set()
     todo = [b for b in boards if b.lower().rstrip("/") not in watched]

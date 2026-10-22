@@ -170,6 +170,12 @@ function CompanyRow({ site, windowMins, selected, scanning, onSelect, onScan, on
           {statusText}
           <span className="sep">·</span>
           checked {ago(site.last_checked_at)}
+          {site.effective_interval && site.effective_interval > site.interval_minutes ? (
+            <>
+              <span className="sep">·</span>
+              every {durationLabel(site.effective_interval)} for now ({site.error_streak ? "its page keeps failing" : "no tech jobs in India"})
+            </>
+          ) : null}
           {site.last_method && status === "ok" ? <><span className="sep">·</span>{methodLabel(site.last_method)}</> : null}
         </span>
         {site.last_error && status !== "checking" ? (

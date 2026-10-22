@@ -271,7 +271,8 @@ def update_site(site_id: int, body: SiteUpdate) -> dict:
         if body.name is not None and body.name.strip():
             conn.execute("UPDATE sites SET name = ? WHERE id = ?", (body.name.strip(), site_id))
         if body.interval_minutes is not None:
-            conn.execute("UPDATE sites SET interval_minutes = ? WHERE id = ?", (body.interval_minutes, site_id))
+            # the new interval applies from now; the next check works out the pace again
+            conn.execute("UPDATE sites SET interval_minutes = ?, effective_interval = NULL WHERE id = ?", (body.interval_minutes, site_id))
     return _site(site_id)
 
 

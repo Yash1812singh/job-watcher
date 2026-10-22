@@ -203,3 +203,58 @@ def test_health_fails_when_the_checker_stalls(monkeypatch):
     monkeypatch.setattr(monitor, "_last_progress", _time.monotonic() - monitor.STALL_SECONDS - 5)
     r = TestClient(main.app).get("/api/health")
     assert r.status_code == 503 and r.json()["status"] == "stalled"
+
+
+def _pace_of(site_id):
+    with db.connect() as conn:
+        r = conn.execute("SELECT interval_minutes, effective_interval, error_streak FROM sites WHERE id = ?", (site_id,)).fetchone()
+    return r["effective_interval"], r["error_streak"]
+
+
+def test_companies_are_checked_as_often_as_they_are_worth(site_id, monkeypatch):
+    with db.connect() as conn:
+        conn.execute("UPDATE sites SET interval_minutes = 2 WHERE id = ?", (site_id,))
+    _scan_returns(monkeypatch, Job("1", "Account Executive", "u1", location="New York"))
+    monitor.scan_site(site_id)
+    assert _pace_of(site_id) == (monitor.COLD_MINUTES, 0)          # nothing in India: hourly
+
+    _scan_returns(monkeypatch, Job("2", "Account Executive", "u2", location="Mumbai, India"))
+    monitor.scan_site(site_id)
+    assert _pace_of(site_id)[0] == 2                                  # just posted in India: its own interval
+
+    with db.connect() as conn:                                        # …a month later, still only a sales role there
+        conn.execute("UPDATE jobs SET first_seen_at = ?", (_minutes_ago(60 * 24 * 30),))
+    monitor.scan_site(site_id)
+    assert _pace_of(site_id)[0] == monitor.WARM_MINUTES
+
+    _scan_returns(monkeypatch, Job("2", "Account Executive", "u2", location="Mumbai, India"),
+                  Job("3", "Backend Engineer", "u3", location="Bengaluru, India"))
+    monitor.scan_site(site_id)
+    assert _pace_of(site_id)[0] == 2                                  # tech job in India: as often as it can
+
+
+def test_a_failing_company_is_checked_less_and_less_until_it_works(site_id, monkeypatch):
+    with db.connect() as conn:
+        conn.execute("UPDATE sites SET interval_minutes = 5 WHERE id = ?", (site_id,))
+    _scan_returns(monkeypatch, error="site down")
+    seen = []
+    for _ in range(8):
+        monitor.scan_site(site_id)
+        seen.append(_pace_of(site_id)[0])
+    assert seen == [10, 20, 40, 80, 160, 320, 360, 360]
+    _scan_returns(monkeypatch, Job("1", "Backend Engineer", "u1", location="Pune, India"))
+    monitor.scan_site(site_id)
+    assert _pace_of(site_id) == (5, 0)
+
+
+def test_due_companies_use_their_pace_and_the_backlog_is_reported(site_id, monkeypatch):
+    with db.connect() as conn:
+        conn.execute("UPDATE sites SET interval_minutes = 2, effective_interval = 60, last_checked_at = ? WHERE id = ?",
+                     (db.to_iso(datetime.now(timezone.utc) - timedelta(minutes=30)), site_id))
+    assert monitor.due_site_ids() == []                               # 30 min ago, checked hourly: not yet
+    with db.connect() as conn:
+        conn.execute("UPDATE sites SET last_checked_at = ? WHERE id = ?",
+                     (db.to_iso(datetime.now(timezone.utc) - timedelta(minutes=90)), site_id))
+    assert monitor.due_site_ids() == [site_id]
+    status = monitor.checker_status()
+    assert (status["companies"], status["overdue"]) == (1, 1) and 29 <= status["most_overdue_minutes"] <= 31

@@ -5,6 +5,8 @@ export type Site = {
   url: string;
   name: string;
   interval_minutes: number;
+  effective_interval: number | null; // how often it's really checked for now (slower without India jobs, or after errors)
+  error_streak: number;
   created_at: string;
   last_checked_at: string | null;
   last_status: SiteStatus;
