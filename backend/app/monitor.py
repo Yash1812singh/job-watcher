@@ -41,12 +41,11 @@ def checker_status() -> dict:
 # server, "overdue" grows and the oldest wait gets long.
 _backlog: dict = {"companies": 0, "overdue": 0, "most_overdue_minutes": 0}
 # One free server can't check thousands of companies every couple of minutes, so each company is
-# checked as often as it's worth (its own interval is the fastest it goes):
-#   hiring for tech roles in India, or posted in India lately   -> its interval
-#   other jobs in India                                          -> every WARM_MINUTES
-#   nothing in India                                             -> every COLD_MINUTES
-#   failing                                                      -> twice as long after each failure, up to MAX_BACKOFF_MINUTES
-WARM_MINUTES = int(os.environ.get("JOB_WATCHER_WARM_MINUTES", "30"))
+# checked as often as it's worth (its own interval is the fastest it goes). Only tech hiring in
+# India matters here:
+#   tech jobs in India open, or one posted there lately   -> its interval
+#   none                                                  -> every COLD_MINUTES
+#   failing                                               -> twice as long after each failure, up to MAX_BACKOFF_MINUTES
 COLD_MINUTES = int(os.environ.get("JOB_WATCHER_COLD_MINUTES", "60"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("JOB_WATCHER_MAX_BACKOFF_MINUTES", "360"))
 RECENT_DAYS = 14
@@ -55,17 +54,11 @@ RECENT_DAYS = 14
 def pace(conn, site_id: int) -> int:
     """How often to check a company that was just checked successfully, from what it's hiring for."""
     chosen = conn.execute("SELECT interval_minutes FROM sites WHERE id = ?", (site_id,)).fetchone()["interval_minutes"]
-    india, india_tech = conn.execute(
-        "SELECT COALESCE(SUM(is_india), 0), COALESCE(SUM(is_india AND is_tech), 0) FROM jobs WHERE site_id = ? AND is_active = 1",
-        (site_id,)).fetchone()
-    if india_tech:
-        return chosen
-    recent = conn.execute(
-        "SELECT 1 FROM jobs WHERE site_id = ? AND is_india = 1 AND is_baseline = 0 AND first_seen_at >= ? LIMIT 1",
+    hiring = conn.execute(
+        """SELECT 1 FROM jobs WHERE site_id = ? AND is_india = 1 AND is_tech = 1
+                  AND (is_active = 1 OR (is_baseline = 0 AND first_seen_at >= ?)) LIMIT 1""",
         (site_id, db.to_iso(datetime.now(timezone.utc) - timedelta(days=RECENT_DAYS)))).fetchone()
-    if recent:
-        return chosen
-    return max(chosen, WARM_MINUTES if india else COLD_MINUTES)
+    return chosen if hiring else max(chosen, COLD_MINUTES)
 
 
 def _failed(conn, site_id: int, checked_at: str, error: str) -> None:

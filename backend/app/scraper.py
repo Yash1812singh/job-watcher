@@ -92,7 +92,7 @@ def detect_ats(text: str) -> tuple[str, str] | None:
 ASHBY_QUERY = """query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
   jobBoard: jobBoardWithTeams(organizationHostedJobsPageName: $organizationHostedJobsPageName) {
     teams { id name }
-    jobPostings { id title teamId locationName }
+    jobPostings { id title teamId locationName workplaceType secondaryLocations { locationName } }
   }
 }"""
 
@@ -115,7 +115,8 @@ def _fetch_ashby_briefs(client: httpx.Client, token: str) -> list[Job]:
             external_id=j["id"],
             title=j["title"].strip(),
             url=f"https://jobs.ashbyhq.com/{token}/{j['id']}",
-            location=j.get("locationName"),
+            location=place([j.get("locationName"), *[l.get("locationName") for l in j.get("secondaryLocations") or []]],
+                           remote=j.get("workplaceType") == "Remote"),
             department=teams.get(j.get("teamId")),
         )
         for j in board["jobPostings"]
@@ -126,6 +127,24 @@ def _get_json(client: httpx.Client, url: str) -> object:
     resp = client.get(url, headers={"Accept": "application/json"})
     resp.raise_for_status()
     return resp.json()
+
+
+COUNTRY_NAMES = {"in": "India", "ind": "India"}
+
+
+def place(locations: list[str | None], country: str | None = None, remote: bool = False) -> str | None:
+    """One location text from everything a board says about where a job is: all its places (a job
+    listed as "Dubai" can also be open in Noida), its country when the places don't name it
+    ("Remote" + IN), and "Remote" for remote jobs, so a remote job in India counts as one."""
+    places = list(dict.fromkeys(p.strip() for p in locations if p and p.strip()))
+    text = " / ".join(places)
+    country = (country or "").strip()
+    country = COUNTRY_NAMES.get(country.lower(), country)
+    if country and country.lower() not in text.lower() and len(country) > 2:
+        text = f"{text}, {country}" if text else country
+    if remote and "remote" not in text.lower():
+        text = f"{text} (Remote)" if text else "Remote"
+    return text or None
 
 
 def fetch_ats_jobs(client: httpx.Client, ats: str, token: str, page_url: str = "") -> list[Job]:
@@ -153,7 +172,8 @@ def fetch_ats_jobs(client: httpx.Client, ats: str, token: str, page_url: str = "
                 external_id=j["id"],
                 title=j["text"].strip(),
                 url=j.get("hostedUrl") or f"https://jobs.lever.co/{token}/{j['id']}",
-                location=cats.get("location"),
+                location=place([cats.get("location"), *(cats.get("allLocations") or [])],
+                               {"IN": "India"}.get(j.get("country") or "", ""), j.get("workplaceType") == "remote"),
                 department=cats.get("team") or cats.get("department"),
                 posted_at=_ms_to_iso(created) if isinstance(created, (int, float)) else None,
             ))
@@ -170,7 +190,8 @@ def fetch_ats_jobs(client: httpx.Client, ats: str, token: str, page_url: str = "
                 external_id=j["id"],
                 title=j["title"].strip(),
                 url=j.get("jobUrl") or f"https://jobs.ashbyhq.com/{token}/{j['id']}",
-                location=j.get("location"),
+                location=place([j.get("location"), *[l.get("location") for l in j.get("secondaryLocations") or []]],
+                               remote=bool(j.get("isRemote"))),
                 department=j.get("department") or j.get("team"),
                 posted_at=j.get("publishedAt"),
             )
@@ -182,12 +203,12 @@ def fetch_ats_jobs(client: httpx.Client, ats: str, token: str, page_url: str = "
         data = _get_json(client, f"https://apply.workable.com/api/v1/widget/accounts/{token}")
         jobs = []
         for j in data.get("jobs", []):
-            place = ", ".join(p for p in (j.get("city"), j.get("country")) if p) or None
+            where = place([", ".join(p for p in (j.get("city"), j.get("country")) if p)], j.get("country"), bool(j.get("telecommuting")))
             jobs.append(Job(
                 external_id=j.get("shortcode") or j["url"],
                 title=j["title"].strip(),
                 url=j.get("url") or j.get("shortlink") or f"https://apply.workable.com/{token}/j/{j.get('shortcode')}",
-                location=place,
+                location=where,
                 department=j.get("department"),
                 posted_at=j.get("published_on"),
             ))
@@ -205,7 +226,8 @@ def fetch_ats_jobs(client: httpx.Client, ats: str, token: str, page_url: str = "
                     external_id=str(j["id"]),
                     title=j["name"].strip(),
                     url=f"https://jobs.smartrecruiters.com/{token}/{j['id']}",
-                    location=", ".join(p for p in (loc.get("city"), loc.get("country")) if p) or None,
+                    location=place([", ".join(p for p in (loc.get("city"), COUNTRY_NAMES.get((loc.get("country") or "").lower(), loc.get("country"))) if p)],
+                                   remote=bool(loc.get("remote"))),
                     department=(j.get("department") or {}).get("label"),
                     posted_at=j.get("releasedDate"),
                 ))

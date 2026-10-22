@@ -24,6 +24,33 @@ from app.scraper import detect_ats  # noqa: E402
 
 PATTERNS = ["boards.greenhouse.io/*", "job-boards.greenhouse.io/*", "jobs.lever.co/*",
             "jobs.ashbyhq.com/*", "*.myworkdayjobs.com"]
+# Hiring tools many Indian companies use (and two whose readers exist but weren't searched for)
+MORE_PATTERNS = ["apply.workable.com/*", "jobs.smartrecruiters.com/*", "careers.smartrecruiters.com/*",
+                 "*.keka.com", "*.darwinbox.in", "*.darwinbox.com", "*.zohorecruit.in", "*.zohorecruit.com",
+                 "*.freshteam.com", "*.recruitee.com", "*.bamboohr.com", "*.breezy.hr", "*.teamtailor.com",
+                 "jobs.jobvite.com/*"]
+# a company's board on a hiring tool where the company is the subdomain: <company>.<tool>
+SUBDOMAIN_BOARDS = {
+    "keka.com": "https://{c}.keka.com/careers/",
+    "darwinbox.in": "https://{c}.darwinbox.in/ms/candidate/careers",
+    "darwinbox.com": "https://{c}.darwinbox.com/ms/candidate/careers",
+    "zohorecruit.in": "https://{c}.zohorecruit.in/jobs/Careers",
+    "zohorecruit.com": "https://{c}.zohorecruit.com/jobs/Careers",
+    "freshteam.com": "https://{c}.freshteam.com/jobs",
+    "recruitee.com": "https://{c}.recruitee.com/",
+    "bamboohr.com": "https://{c}.bamboohr.com/careers",
+    "breezy.hr": "https://{c}.breezy.hr/",
+    "teamtailor.com": "https://{c}.teamtailor.com/jobs",
+}
+# subdomains that are the tool's own pages, not a company
+NOT_A_COMPANY = {"www", "app", "api", "help", "support", "status", "blog", "docs", "careers", "jobs", "login", "auth",
+                 "cdn", "static", "assets", "mail", "marketplace", "partners", "developers", "community", "info", "go",
+                 "signup", "demo", "my", "admin", "accounts", "learn", "academy", "resources", "events", "content"}
+PATH_BOARDS = [
+    (re.compile(r"apply\.workable\.com/(?!api\b|j\b)([\w-]{2,80})", re.I), "https://apply.workable.com/{c}/"),
+    (re.compile(r"(?:jobs|careers)\.smartrecruiters\.com/(?!oneclick-ui\b)([A-Za-z][\w-]{1,80})", re.I), "https://jobs.smartrecruiters.com/{c}"),
+    (re.compile(r"jobs\.jobvite\.com/(?!careers\b)([\w-]{2,80})", re.I), "https://jobs.jobvite.com/{c}"),
+]
 BOARD_URL = {
     "greenhouse": "https://boards.greenhouse.io/{t}",
     "lever": "https://jobs.lever.co/{t}",
@@ -32,7 +59,7 @@ BOARD_URL = {
 
 
 def get(client: httpx.Client, endpoint: str, **params) -> httpx.Response | None:
-    for attempt in range(4):           # the index is slow and sometimes times out; be patient
+    for attempt in range(8):           # the index is slow and often times out (504); be patient
         try:
             r = client.get(endpoint, params=params)
             if r.status_code == 200:
@@ -41,11 +68,22 @@ def get(client: httpx.Client, endpoint: str, **params) -> httpx.Response | None:
                 return None
         except httpx.HTTPError:
             pass
-        time.sleep(5 * (attempt + 1))
+        time.sleep(min(10 * 2 ** attempt, 300))
     return None
 
 
 def board_from(url: str) -> str | None:
+    host = re.sub(r"^https?://", "", url).split("/")[0].split(":")[0].lower()
+    for domain, board in SUBDOMAIN_BOARDS.items():
+        if host.endswith("." + domain):
+            company = host[: -len(domain) - 1]
+            if "." in company or company in NOT_A_COMPANY or not re.fullmatch(r"[a-z0-9-]{2,63}", company):
+                return None
+            return board.format(c=company)
+    for pattern, board in PATH_BOARDS:
+        m = pattern.search(url)
+        if m:
+            return board.format(c=m.group(1))
     ats = detect_ats(url)
     if not ats:
         return None
@@ -64,14 +102,16 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--crawls", type=int, default=3, help="how many recent crawls to read")
     parser.add_argument("--out", default=str(ROOT / "seed" / "crawl-boards.txt"))
+    parser.add_argument("--more", action="store_true", help="search the other hiring tools (Keka, Darwinbox, Zoho Recruit…)")
     args = parser.parse_args()
+    patterns = MORE_PATTERNS if args.more else PATTERNS
 
     boards: set[str] = set()
     with httpx.Client(timeout=180, headers={"User-Agent": "JobWatcher/0.1 (personal job tracker)"}) as client:
         crawls = client.get("https://index.commoncrawl.org/collinfo.json").json()[: args.crawls]
         for crawl in crawls:
             api = crawl["cdx-api"]
-            for pattern in PATTERNS:
+            for pattern in patterns:
                 info = get(client, api, url=pattern, output="json", showNumPages="true")
                 pages = json.loads(info.text)["pages"] if info else 0
                 before = len(boards)
@@ -86,6 +126,7 @@ def main() -> None:
                             continue
                         if board:
                             boards.add(board)
+                time.sleep(2)  # be gentle with a free, busy service
                 print(f"{crawl['id']} {pattern:<28} {pages} pages, +{len(boards) - before} boards "
                       f"(total {len(boards)})", flush=True)
 

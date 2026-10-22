@@ -220,17 +220,21 @@ def test_companies_are_checked_as_often_as_they_are_worth(site_id, monkeypatch):
 
     _scan_returns(monkeypatch, Job("2", "Account Executive", "u2", location="Mumbai, India"))
     monitor.scan_site(site_id)
-    assert _pace_of(site_id)[0] == 2                                  # just posted in India: its own interval
-
-    with db.connect() as conn:                                        # …a month later, still only a sales role there
-        conn.execute("UPDATE jobs SET first_seen_at = ?", (_minutes_ago(60 * 24 * 30),))
-    monitor.scan_site(site_id)
-    assert _pace_of(site_id)[0] == monitor.WARM_MINUTES
+    assert _pace_of(site_id)[0] == monitor.COLD_MINUTES               # only sales in India: not tech hiring
 
     _scan_returns(monkeypatch, Job("2", "Account Executive", "u2", location="Mumbai, India"),
                   Job("3", "Backend Engineer", "u3", location="Bengaluru, India"))
     monitor.scan_site(site_id)
     assert _pace_of(site_id)[0] == 2                                  # tech job in India: as often as it can
+
+    _scan_returns(monkeypatch, Job("2", "Account Executive", "u2", location="Mumbai, India"))
+    monitor.scan_site(site_id)
+    assert _pace_of(site_id)[0] == 2                                  # it closed, but was posted lately: keep watching
+
+    with db.connect() as conn:                                        # …two weeks on, no tech hiring in India
+        conn.execute("UPDATE jobs SET first_seen_at = ?", (_minutes_ago(60 * 24 * 15),))
+    monitor.scan_site(site_id)
+    assert _pace_of(site_id)[0] == monitor.COLD_MINUTES
 
 
 def test_a_failing_company_is_checked_less_and_less_until_it_works(site_id, monkeypatch):

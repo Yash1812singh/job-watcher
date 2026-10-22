@@ -337,7 +337,7 @@ def test_job_board_found_in_data_the_page_loads(monkeypatch):
     })
     result = scan("https://careers.swiggy.in/explore-jobs", client=client, render=True)
     assert result.method == "smartrecruiters (rendered)"
-    assert [(j.title, j.location) for j in result.jobs] == [("Sales Manager I", "Bengaluru, in")]
+    assert [(j.title, j.location) for j in result.jobs] == [("Sales Manager I", "Bengaluru, India")]
 
 
 def test_relative_posting_phrases():

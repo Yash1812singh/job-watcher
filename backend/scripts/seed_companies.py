@@ -21,6 +21,7 @@ import httpx
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from app.classify import is_india, is_tech  # noqa: E402
 from app.scraper import ScanError, detect_ats, scan  # noqa: E402
 
 WORKDAY_SERVERS = ["wd1", "wd3", "wd5", "wd12", "wd103", "wd108"]
@@ -37,6 +38,7 @@ AUTH = ("me", os.environ["JOB_WATCHER_PASSWORD"]) if os.environ.get("JOB_WATCHER
 # Hosted job boards give exact posting times, so a 2-minute check still shows the true
 # "posted N min ago". Pages read through the browser are heavier, so they're checked less often.
 INTERVAL_BOARD, INTERVAL_PAGE, INTERVAL_BROWSER = 2, 2, 5
+TECH_ONLY = False
 
 
 def load_candidates(path: Path) -> list[tuple[str, str]]:
@@ -58,11 +60,14 @@ def check(candidate: tuple[str, str]) -> dict:
     try:
         result = scan(url)
         ok = bool(result.jobs) and not result.weak
-        return {"name": name, "url": url, "ok": ok, "jobs": len(result.jobs), "method": result.method,
-                "seconds": round(time.time() - started, 1),
-                "why": None if ok else (result.note or "no jobs")}
+        india_tech = sum(1 for j in result.jobs if is_india(j.location) and is_tech(j.title, j.department))
+        why = None if ok else (result.note or "no jobs")
+        if ok and TECH_ONLY and not india_tech:
+            ok, why = False, "no tech jobs in India right now"
+        return {"name": name, "url": url, "ok": ok, "jobs": len(result.jobs), "method": result.method, "india_tech": india_tech,
+                "seconds": round(time.time() - started, 1), "why": why}
     except (ScanError, Exception) as e:  # one broken site shouldn't stop the run
-        return {"name": name, "url": url, "ok": False, "jobs": 0, "method": None,
+        return {"name": name, "url": url, "ok": False, "jobs": 0, "method": None, "india_tech": 0,
                 "seconds": round(time.time() - started, 1), "why": str(e)[:160]}
 
 
@@ -80,7 +85,10 @@ def main() -> None:
     parser.add_argument("--interval", type=int, help="check every N minutes for all added companies")
     parser.add_argument("--limit", type=int, help="add at most N new companies (in file order), e.g. 500 at a time")
     parser.add_argument("--skip-watched", action="store_true", help="don't re-check companies already being watched")
+    parser.add_argument("--india-tech-only", action="store_true", help="only add companies with tech jobs open in India")
     args = parser.parse_args()
+    global TECH_ONLY
+    TECH_ONLY = args.india_tech_only
 
     candidates = load_candidates(Path(args.file))
     if args.skip_watched or args.limit:
@@ -118,7 +126,8 @@ def main() -> None:
     for r in results:
         if r["ok"] and (r["name"] not in best or r["jobs"] > best[r["name"]]["jobs"]):
             best[r["name"]] = r
-    working = sorted(best.values(), key=lambda r: r["name"].lower())
+    # most India tech jobs first, so a --limit batch adds the most useful companies
+    working = sorted(best.values(), key=lambda r: (-r["india_tech"], r["name"].lower()))
     failed = [r for r in results if not r["ok"] and r["name"] not in best]
 
     source = Path(args.file).resolve()
