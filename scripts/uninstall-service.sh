@@ -5,4 +5,7 @@ set -euo pipefail
 LABEL="com.jobwatcher.server"
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 rm -f "$HOME/Library/LaunchAgents/$LABEL.plist"
+# and the helper that kept the Mac awake for it
+launchctl bootout "gui/$(id -u)/com.jobwatcher.awake" 2>/dev/null || true
+rm -f "$HOME/Library/LaunchAgents/com.jobwatcher.awake.plist"
 echo "Job Watcher background service removed."

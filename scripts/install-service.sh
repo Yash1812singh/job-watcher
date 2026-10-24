@@ -49,6 +49,33 @@ if [[ -f "$AUTOAPPLY/config/user_profile.yaml" ]]; then
   echo "Fill with AI: using the profile and resume from $AUTOAPPLY"
 fi
 
+# Optional extras, as environment variables when running this script:
+#   JOB_WATCHER_BACKUP_REPO=you/job-watcher-data  back the database up to that private Hugging Face
+#                                                 dataset every 15 min (uses your `hf auth login` token)
+#   JOB_WATCHER_PASSWORD=...                      ask for this password (when the site is shared publicly)
+# A Mac checks far faster than a free cloud server, so companies are checked as often as they're set
+# (2 min), quiet ones every 10 and the rest every 30.
+EXTRA_ENV="    <key>JOB_WATCHER_FASTEST_MINUTES</key><string>2</string>
+    <key>JOB_WATCHER_WARM_MINUTES</key><string>10</string>
+    <key>JOB_WATCHER_COLD_MINUTES</key><string>30</string>"
+HF_TOKEN_FILE="$HOME/.cache/huggingface/token"
+if [[ -n "${JOB_WATCHER_BACKUP_REPO:-}" && -f "$HF_TOKEN_FILE" ]]; then
+  EXTRA_ENV="$EXTRA_ENV
+    <key>JOB_WATCHER_BACKUP_REPO</key><string>$JOB_WATCHER_BACKUP_REPO</string>
+    <key>HF_TOKEN</key><string>$(cat "$HF_TOKEN_FILE")</string>"
+  echo "Backing the database up to the Hugging Face dataset $JOB_WATCHER_BACKUP_REPO every 15 minutes"
+fi
+if [[ -n "${JOB_WATCHER_PASSWORD:-}" ]]; then
+  EXTRA_ENV="$EXTRA_ENV
+    <key>JOB_WATCHER_PASSWORD</key><string>$JOB_WATCHER_PASSWORD</string>"
+fi
+if [[ -f "$FILL/keys.env" ]]; then
+  GROQ="$(sed -n 's/^GROQ_API_KEY=//p' "$FILL/keys.env" | tr -d '"' | head -1)"
+  [[ -n "$GROQ" ]] && EXTRA_ENV="$EXTRA_ENV
+    <key>GROQ_API_KEY</key><string>$GROQ</string>"
+fi
+
+umask 077   # the service file holds keys: only you can read it
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -70,6 +97,7 @@ cat > "$PLIST" <<EOF
     <key>JOB_WATCHER_APPLY_PROFILE</key><string>$FILL/profile.yaml</string>
     <key>JOB_WATCHER_APPLY_RESUME</key><string>$FILL/resume.pdf</string>
     <key>JOB_WATCHER_APPLY_KEYS</key><string>$FILL/keys.env</string>
+$EXTRA_ENV
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -79,6 +107,26 @@ cat > "$PLIST" <<EOF
 </dict>
 </plist>
 EOF
+
+umask 022
+
+# Keep the Mac from sleeping while it's plugged in, so checks don't stop when the screen turns off.
+# (Closing the lid still puts a MacBook to sleep, unless it's connected to a display.)
+AWAKE="com.jobwatcher.awake"
+cat > "$HOME/Library/LaunchAgents/$AWAKE.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$AWAKE</string>
+  <key>ProgramArguments</key><array><string>/usr/bin/caffeinate</string><string>-s</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+</dict>
+</plist>
+EOF
+launchctl bootout "gui/$(id -u)/$AWAKE" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$AWAKE.plist"
 
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 # wait for the old copy to exit before starting the new one
