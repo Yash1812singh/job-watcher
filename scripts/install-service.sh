@@ -21,6 +21,8 @@ echo "Building the website…"
 echo "Copying the app to ${APP}…"
 rsync -a --delete --exclude __pycache__ "$ROOT/backend/app/" "$APP/app/"
 rsync -a --delete "$ROOT/frontend/dist/" "$APP/web/"
+# the browser extension, so the website can hand it out (Extension tab → Download)
+rsync -a --delete --exclude store "$ROOT/extension/" "$APP/extension/"
 cp "$ROOT/backend/requirements.txt" "$APP/requirements.txt"
 
 if [[ ! -x "$APP/venv/bin/uvicorn" ]] || ! cmp -s "$ROOT/backend/requirements.txt" "$APP/.installed-requirements"; then
@@ -94,6 +96,7 @@ cat > "$PLIST" <<EOF
   <dict>
     <key>JOB_WATCHER_DB</key><string>$APP/jobwatcher.db</string>
     <key>JOB_WATCHER_FRONTEND</key><string>$APP/web</string>
+    <key>JOB_WATCHER_EXTENSION_DIR</key><string>$APP/extension</string>
     <key>JOB_WATCHER_APPLY_PROFILE</key><string>$FILL/profile.yaml</string>
     <key>JOB_WATCHER_APPLY_RESUME</key><string>$FILL/resume.pdf</string>
     <key>JOB_WATCHER_APPLY_KEYS</key><string>$FILL/keys.env</string>
