@@ -32,3 +32,37 @@ $("save").onclick = async () => {
     out.textContent = `Can't reach ${server}.`;
   }
 };
+
+// Job site passwords (made on sign-up pages; see background.js)
+function showPasswords() {
+  chrome.storage.local.get({ passwords: {} }, ({ passwords }) => {
+    const table = $("pw");
+    table.replaceChildren();
+    const hosts = Object.keys(passwords).sort();
+    $("nopw").hidden = hosts.length > 0;
+    for (const host of hosts) {
+      const row = table.insertRow();
+      row.insertCell().textContent = host;
+      const pw = row.insertCell();
+      const code = document.createElement("code");
+      code.textContent = "••••••••••";
+      pw.append(code);
+      const actions = row.insertCell();
+      actions.style.textAlign = "right";
+      const button = (label, onclick) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.onclick = onclick;
+        actions.append(b);
+      };
+      button("Show", () => (code.textContent = code.textContent.startsWith("•") ? passwords[host].password : "••••••••••"));
+      button("Copy", () => navigator.clipboard.writeText(passwords[host].password));
+      button("Forget", () => {
+        if (!confirm(`Forget the password for ${host}? You'd need the site's "forgot password" to sign in again.`)) return;
+        delete passwords[host];
+        chrome.storage.local.set({ passwords }, showPasswords);
+      });
+    }
+  });
+}
+showPasswords();

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  api, ApiError, getToken, setToken,
+  api, ApiError, getToken, imageUrl, setToken,
   type Application, type Entry, type Job, type Key, type ProfileData, type ProfileResponse, type User,
 } from "./api";
 
@@ -256,6 +256,24 @@ function JobsTab({ ext, profilePct, go }: { ext: ExtState; profilePct: number; g
     window.open(`${j.apply_url}#fill-with-ai=${j.id}`, "_blank", "noopener");
     setJobs((list) => list?.map((x) => (x.id === j.id && !x.application ? { ...x, application: "opened" } : x)) ?? null);
   };
+  // Apply to all: the extension opens these one after another in one tab, fills each page and goes on
+  const todo = (jobs ?? []).filter((j) => j.application !== "submitted");
+  const [queued, setQueued] = useState("");
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.source !== window || e.origin !== location.origin || e.data?.source !== "fwai-ext" || e.data.type !== "queued") return;
+      setQueued(e.data.ok ? `Applying to ${e.data.count} jobs in a new tab. Check each one and click Submit; the next opens by itself.`
+                          : `Couldn't start: ${e.data.error || "is the extension up to date?"}`);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+  const applyAll = () => {
+    if (!confirm(`Apply to ${todo.length} job${todo.length === 1 ? "" : "s"}?\n\nThey open one after another in a new tab. Each form is filled, ` +
+                 "your resume is matched to the job, and Next is clicked for you. You check each one and click Submit; then the next opens. " +
+                 "Close the tab to stop.")) return;
+    window.postMessage({ source: "fwai-page", type: "queue", jobs: todo.map((j) => ({ id: j.id, url: j.apply_url })) }, location.origin);
+  };
   return (
     <div className="f-tab">
       {!hasKey && (
@@ -280,6 +298,13 @@ function JobsTab({ ext, profilePct, go }: { ext: ExtState; profilePct: number; g
         </label>
       </div>
       {error && <p className="f-error">{error}</p>}
+      {queued && <div className="f-banner">{queued}</div>}
+      {hasKey && ext.installed && todo.length > 1 && (
+        <div className="f-applyall">
+          <button className="f-primary" onClick={applyAll}>Apply to all {todo.length}</button>
+          <span className="f-muted small">Opens them one after another: filled, resume matched to each job, pages moved through. You only check and click Submit.</span>
+        </div>
+      )}
       {jobs === null ? <p className="f-muted">Loading jobs…</p> : jobs.length === 0 ? (
         <div className="f-card f-empty">
           No new jobs in the last {WINDOWS.find(([m]) => m === within)?.[1]}{q ? ` matching “${q}”` : ""}.
@@ -299,6 +324,7 @@ function JobsTab({ ext, profilePct, go }: { ext: ExtState; profilePct: number; g
               <div className="f-job-actions">
                 {j.application === "submitted" && <span className="f-chip ok">Applied ✓</span>}
                 {j.application === "opened" && <span className="f-chip">In progress</span>}
+                {j.application === "filled" && <span className="f-chip">Ready to submit</span>}
                 <button className="f-primary" onClick={() => open(j)}>{j.application === "submitted" ? "Open again" : "Apply with AI"}</button>
               </div>
             </li>
@@ -309,38 +335,118 @@ function JobsTab({ ext, profilePct, go }: { ext: ExtState; profilePct: number; g
   );
 }
 
+const STATUS: Record<Application["status"], [string, string]> = {
+  submitted: ["Applied ✓", "ok"], filled: ["Ready to submit", ""], opened: ["In progress", ""],
+};
+
+function Proof({ id }: { id: number }) {
+  const [src, setSrc] = useState("");
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let url = "";
+    imageUrl(`/applications/${id}/proof`).then((u) => { url = u; setSrc(u); }).catch(() => setFailed(true));
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [id]);
+  if (failed) return <p className="f-muted small">The screenshot couldn't be loaded.</p>;
+  return src ? <a href={src} target="_blank" rel="noreferrer"><img className="f-proof" src={src} alt="The site's confirmation page after you submitted" /></a>
+             : <p className="f-muted small">Loading the screenshot…</p>;
+}
+
+function ApplicationDetails({ a, onSkills }: { a: Application; onSkills: (skills: string[]) => Promise<void> }) {
+  const d = a.details || {};
+  const [added, setAdded] = useState<string[]>([]);
+  const missing = (d.resume?.missing ?? []).filter((k) => !added.includes(k));
+  const confirm = async (skills: string[]) => { await onSkills(skills); setAdded((x) => [...x, ...skills]); };
+  return (
+    <div className="f-app-details">
+      {a.status === "submitted" && (
+        <section>
+          <h4>Confirmation</h4>
+          <p>Submitted {a.submitted_at ? new Date(a.submitted_at).toLocaleString() : ""}.{d.confirmation ? <> The site said: <q>{d.confirmation}</q></> : null}</p>
+          {a.has_proof && <Proof id={a.id} />}
+        </section>
+      )}
+      {d.resume && (
+        <section>
+          <h4>Resume sent</h4>
+          {d.resume.tailored ? (
+            <p>Your resume, with its wording matched to this job{d.resume.added.length ? <>: <b>{d.resume.added.join(", ")}</b></> : null}. Nothing was added that your resume or profile doesn't show.</p>
+          ) : <p>Your resume as it is ({d.resume.name}).{d.resume.note ? ` ${d.resume.note}` : ""}</p>}
+          {missing.length > 0 && (
+            <div className="f-missing">
+              <p className="f-muted small">The job also asks for these, which your resume doesn't show, so they weren't added. If you do have one, add it to your skills and future resumes will use it:</p>
+              <div className="f-chips">
+                {missing.map((k) => <button key={k} className="f-chip-btn" onClick={() => confirm([k])} title={`Add “${k}” to your skills`}>+ {k}</button>)}
+              </div>
+            </div>
+          )}
+          {added.length > 0 && <p className="f-muted small">Added to your skills: {added.join(", ")}.</p>}
+        </section>
+      )}
+      {d.account?.created && <section><h4>Account</h4><p>Made an account password for {d.account.site} (saved in the extension's Options page).</p></section>}
+      {(d.needs?.length ?? 0) > 0 && a.status !== "submitted" && (
+        <section><h4>Left for you</h4><ul>{d.needs!.map((n) => <li key={n}>{n}</li>)}</ul></section>
+      )}
+      {(d.filled?.length ?? 0) > 0 && (
+        <section>
+          <h4>Filled in ({d.filled!.length})</h4>
+          <table className="f-filled"><tbody>
+            {d.filled!.map((f, i) => (
+              <tr key={i}><th>{f.label}</th><td>{f.value}{f.source === "ai" ? <span className="f-tag">AI</span> : null}</td></tr>
+            ))}
+          </tbody></table>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function ApplicationsTab({ go }: { go: (t: Tab) => void }) {
   const [apps, setApps] = useState<Application[] | null>(null);
   useEffect(() => { api<Application[]>("/applications").then(setApps).catch(() => setApps([])); }, []);
+  const addSkills = async (skills: string[]) => {
+    await api("/profile/skills", { method: "POST", body: JSON.stringify({ skills }) });
+  };
   if (apps === null) return <p className="f-muted">Loading…</p>;
   const sent = apps.filter((a) => a.status === "submitted").length;
+  const ready = apps.filter((a) => a.status === "filled").length;
   return (
     <div className="f-tab">
       <div className="f-stats">
         <div className="f-card"><b>{sent}</b><span>applied</span></div>
-        <div className="f-card"><b>{apps.length - sent}</b><span>in progress</span></div>
+        <div className="f-card"><b>{ready}</b><span>ready to submit</span></div>
+        <div className="f-card"><b>{apps.length - sent - ready}</b><span>in progress</span></div>
       </div>
       {apps.length === 0 ? (
         <div className="f-card f-empty">Nothing yet. <button className="f-link" onClick={() => go("jobs")}>Pick a job to apply to →</button></div>
       ) : (
         <ul className="f-jobs">
-          {apps.map((a) => (
-            <li key={a.id} className="f-card f-job">
-              <div className="f-job-main">
-                <span className="f-job-title">{a.title || a.url}</span>
-                <div className="f-muted small"><b className="f-company">{a.company}</b> · {a.status === "submitted" ? "applied" : "opened"} {ago(a.updated_at)}</div>
-              </div>
-              <div className="f-job-actions">
-                <span className={`f-chip${a.status === "submitted" ? " ok" : ""}`}>{a.status === "submitted" ? "Applied ✓" : "In progress"}</span>
-                {a.status !== "submitted" && (
-                  <button onClick={() => window.open(a.job_id ? `${a.url}#fill-with-ai=${a.job_id}` : a.url, "_blank", "noopener")}>Continue</button>
-                )}
-              </div>
-            </li>
-          ))}
+          {apps.map((a) => {
+            const [label, tone] = STATUS[a.status] ?? STATUS.opened;
+            return (
+              <li key={a.id} className="f-card f-job f-app">
+                <div className="f-job-row">
+                  <div className="f-job-main">
+                    <a href={a.url} target="_blank" rel="noreferrer" className="f-job-title">{a.title || a.url}</a>
+                    <div className="f-muted small"><b className="f-company">{a.company || a.details?.site}</b> · {a.status === "submitted" ? "applied" : "last worked on"} {ago(a.submitted_at || a.updated_at)}</div>
+                  </div>
+                  <div className="f-job-actions">
+                    <span className={`f-chip${tone ? ` ${tone}` : ""}`}>{label}</span>
+                    {a.status !== "submitted" && (
+                      <button onClick={() => window.open(a.job_id ? `${a.url}#fill-with-ai=${a.job_id}` : a.url, "_blank", "noopener")}>Continue</button>
+                    )}
+                  </div>
+                </div>
+                <details>
+                  <summary>What was sent{a.has_proof ? " · with screenshot" : ""}</summary>
+                  <ApplicationDetails a={a} onSkills={addSkills} />
+                </details>
+              </li>
+            );
+          })}
         </ul>
       )}
-      <p className="f-muted small">An application counts as applied when the panel sees the site's confirmation after you submit.</p>
+      <p className="f-muted small">An application counts as applied when the panel sees the site's confirmation after you submit; a screenshot of it is kept here as proof.</p>
     </div>
   );
 }
@@ -570,6 +676,11 @@ function ProfileForm({ d, setD, saved, setSaved, pct, missing }: {
             <Field label="Skills" wide multiline rows={3} value={d.skills ?? ""} onChange={(v) => setD((x) => ({ ...x, skills: v }))} placeholder="Python, Django, PostgreSQL, AWS, React" hint="Comma-separated." />
             <Field label="Professional summary" wide multiline rows={3} value={d.summary ?? ""} onChange={(v) => setD((x) => ({ ...x, summary: v }))} placeholder="Two or three lines about you." />
           </div>
+          <label className="f-check f-pref">
+            <input type="checkbox" checked={d.preferences?.tailor_resume !== false}
+                   onChange={(e) => setD((x) => ({ ...x, preferences: { ...x.preferences, tailor_resume: e.target.checked } }))} />
+            <span><b>Match my resume to each job.</b> Its wording uses the job's terms for skills your resume or these skills show (nothing you don't have is ever added). Employers, titles, dates and numbers stay exactly as they are.</span>
+          </label>
         </Section>
 
         <Section id="languages" title="Languages & certifications">

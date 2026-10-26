@@ -10,6 +10,8 @@
   const auto = window.__fwaiAuto || null;   // { jobId } when opened from the Fill with AI website
   const isTop = window === window.top;
   const state = { run: 0, busy: false, pending: false, filled: 0, byAI: 0, stopped: false, submitted: false, opened: false };
+  // what this page's filling did, sent with the application so the user can check it later
+  const record = { filled: [], resume: null, account: null };
   // Which question each box was last filled for. Multi-step forms often reuse the same input
   // boxes for the next step's questions, so "this box was handled" alone isn't enough.
   let tried = new WeakMap();
@@ -64,6 +66,7 @@
           <div class="title"><b class="t"></b><span class="status"></span></div>
           <div class="actions">
             <button class="continue primary" hidden>Continue ▸</button>
+            <button class="skip" hidden title="Leave this job and open the next one">Skip ▸</button>
             <button class="again">Fill again</button>
             <button class="icon toggle" title="Show / hide details">▾</button>
             <button class="icon close" title="Stop filling this tab">×</button>
@@ -84,8 +87,10 @@
       host.remove();
     };
     $(".continue").onclick = () => { const b = nextButton(); if (b) b.click(); };
+    $(".skip").hidden = !auto?.total;
+    $(".skip").onclick = () => chrome.runtime.sendMessage({ type: "skip" }, () => void chrome.runtime.lastError);
     panel = {
-      title(t) { $(".t").textContent = t; },
+      title(t) { $(".t").textContent = (auto?.total ? `Job ${auto.position} of ${auto.total} · ` : "") + t; },
       status(t, tone = "") { const s = $(".status"); s.textContent = t; s.className = "status " + tone; },
       busy(t) {
         const s = $(".status");
@@ -407,8 +412,17 @@
           attach(el, value, new TextEncoder().encode(a.text || ""), "text/plain");
           return true;
         }
-        const res = await ask({ type: "resume" });
-        if (!res.ok) return false;
+        // the resume with its keywords matched to this job (never new facts); the plain one otherwise
+        let res = await ask({ type: "tailoredResume", payload: { job_id: auto?.jobId || null, url: location.href,
+                                                                 page_text: pageText().replace(/\s+/g, " ").slice(0, 15000) } });
+        if (res.ok) {
+          const { name, tailored, added, missing, note } = res.data;
+          record.resume = { name, tailored, added, missing, note: note || null };
+        } else {
+          res = await ask({ type: "resume" });
+          if (!res.ok) return false;
+          record.resume = { name: res.data.name, tailored: false, added: [], missing: [], note: null };
+        }
         attach(el, res.data.name, Uint8Array.from(atob(res.data.b64), (c) => c.charCodeAt(0)), "application/pdf");
         return true;
       }
@@ -529,28 +543,47 @@
     if (SUCCESS.test(pageText())) {
       if (!state.submitted) {
         state.submitted = true;
-        ask({ type: "report", payload: { job_id: auto?.jobId || null, url: location.href, title: document.title, status: "submitted" } });
+        const said = (pageText().match(new RegExp(`[^.!\\n]{0,80}(?:${SUCCESS.source})[^.!\\n]{0,80}`, "i")) || [""])[0].trim();
+        if (panel) panel.status("Application submitted. Saving a screenshot of this page as proof…", "ok");
+        await sleep(1200); // let the confirmation finish drawing
+        const shot = isTop ? await ask({ type: "proof" }) : { ok: false };
+        ask({ type: "report", payload: { job_id: auto?.jobId || null, url: location.href, title: document.title, status: "submitted",
+                                         proof_b64: shot.ok && shot.data ? shot.data : null,
+                                         details: { confirmation: said.slice(0, 300), ...record } } });
       }
       if (isTop || panel) {
-        ui().status("Application submitted. It's in My applications. 🎉", "ok");
+        ui().status(auto?.total && auto.position < auto.total ? "Application submitted 🎉 Opening the next job…"
+                                                              : "Application submitted. It's in My applications. 🎉", "ok");
         ui().needs([], "");
         ui().showContinue(false);
       }
       return;
     }
 
+    const account = await accountPasswords();
     let fields = collect();
     if (!isForm(fields)) {
       if (!isTop) return; // a frame without a form (ads, chat widgets): stay quiet
       const p = ui();
       const openForm = applyButton();
       p.showContinue(false);
-      if (formFrame()) {
+      if (account) {
+        p.status(account.created ? "Made a strong password for this site and filled it in. Click the button to create your account."
+                                 : "Filled in your saved password for this site. Click the button to sign in.", "warn");
+        p.needs([], "Saved in the extension (its Options page lists them). If the site emails you a code, enter it here; I'll carry on after.");
+        if (account.created) { record.account = { site: location.hostname, created: true }; report("opened"); }
+        keepButtonsVisible(null);
+      } else if (formFrame()) {
         p.status("The application form is lower on this page: I'm filling it there.", "ok");
         p.needs([], "Scroll down to it; anything that needs you is listed in its own panel.");
       } else if (signInWall()) {
         p.status("This site needs you to sign in or create an account.", "warn");
         p.needs([], "Do that here, then I'll fill the application as soon as it appears.");
+      } else if (openForm && auto?.run && !state.clickedApply) {
+        state.clickedApply = true;           // Apply to all: open the form (this never submits anything)
+        p.status(`Opening the application form (“${clean(openForm.innerText)}”)…`, "ok");
+        await sleep(800);
+        openForm.click();
       } else {
         p.status(openForm ? `Click “${clean(openForm.innerText)}” to open the application form.` : "Waiting for the application form…", "warn");
         p.needs([], "I'll start filling as soon as the form appears. If it's in a box lower on the page, I'm filling it there.");
@@ -598,6 +631,8 @@
               counted.add(q);
               state.filled++;
               if (a.source === "ai" || a.source === "cover") state.byAI++;
+              record.filled.push({ label: f.label.slice(0, 160), source: a.source,
+                                   value: a.source === "cover" ? "(cover letter)" : String(a.value).slice(0, 300) });
             }
             mark(f, "#2f9e55");
           }
@@ -606,7 +641,65 @@
         }
       }
     }
-    review(true);
+    const left = review(true);
+    if (left && account) {   // an account page with the details on it: the user creates the account / signs in
+      panel.status(account.created ? "Filled your details and a new strong password (saved in the extension). Click the button to create your account."
+                                   : "Filled your details and your saved password. Click the button to sign in.", "warn");
+      if (account.created) record.account = { site: location.hostname, created: true };
+      report("opened", left.needs.map((n) => n.text));
+    } else if (left) {
+      report(left.needs.length || left.next ? "opened" : "filled", left.needs.map((n) => n.text));
+      // Apply to all: a finished page goes on by itself (Next/Continue only; never Submit)
+      if (auto?.run && !left.needs.length && left.next && !state.stopped) {
+        const step = sig({ label: left.next.innerText || "", options: [] });
+        if (state.lastStep !== step) {
+          state.lastStep = step;
+          panel?.status(`This page is done: ${state.filled} filled. Going on to the next page…`, "ok");
+          setTimeout(() => { if (!state.stopped && nextButton() === left.next) left.next.click(); }, 1500);
+        }
+      }
+    }
+  }
+
+  // The panel sits at the top of the page; on a short form the button the user has to click (Submit,
+  // Create account…) can be right under it. Then it moves to the bottom of the window.
+  function keepButtonsVisible(next) {
+    if (!panelHost) return;
+    const box = panelHost.getBoundingClientRect();
+    const buttons = [next, ...all("button, input[type=submit], [role=button]").filter((b) =>
+      visible(b) && !b.closest?.("#fwai-panel-host") && /submit|apply|create|sign|register|continue|next/i.test(clean(b.innerText || b.value || "")))];
+    const covered = buttons.some((b) => {
+      if (!b) return false;
+      const r = b.getBoundingClientRect();
+      return r.bottom > box.top && r.top < box.bottom && r.right > box.left && r.left < box.right;
+    });
+    if (covered) {
+      panelHost.style.top = "auto";
+      panelHost.style.bottom = "12px";
+    }
+  }
+
+  function report(status, needs = []) {
+    ask({ type: "report", payload: { job_id: auto?.jobId || null, url: location.href, title: document.title, status,
+                                     details: { ...record, needs, site: location.hostname } } });
+  }
+
+  // Job sites' account pages: a new password is made (and kept in the extension) for a sign-up form,
+  // the saved one filled into a sign-in form. Returns what it did, or null when there's no password box.
+  async function accountPasswords() {
+    const boxes = all("input[type=password]").filter((b) => visible(b) && !b.disabled);
+    if (!boxes.length || boxes.every((b) => b.value)) return boxes.length ? state.account || null : null;
+    const words = (b) => [b.autocomplete, b.name, b.id, b.placeholder, b.getAttribute("aria-label"), b.labels?.[0]?.innerText].join(" ");
+    const signUp = boxes.length >= 2 || boxes.some((b) => /new-password|creat|new|confirm|re-?enter|repeat|verify/i.test(words(b)));
+    const res = await ask({ type: "password", create: signUp });
+    if (!res.ok || !res.data) return null;
+    for (const b of boxes) {
+      b.focus();
+      setValue(b, res.data.password);
+      b.dispatchEvent(new Event("blur", { bubbles: true, composed: true }));
+    }
+    state.account = { created: !!res.data.created };
+    return state.account;
   }
 
   // A page can look ready before its scripts have taken over the form (Greenhouse's dropdowns don't
@@ -647,10 +740,10 @@
 
   // What's still left for the user; re-checked as they work and after every pass.
   function review(final = false) {
-    if (!panel || state.submitted || state.stopped) return;
-    if (state.busy && !final) return; // mid-fill: the panel says "Filling…" until the pass is over
+    if (!panel || state.submitted || state.stopped) return null;
+    if (state.busy && !final) return null; // mid-fill: the panel says "Filling…" until the pass is over
     const fields = collect();
-    if (!isForm(fields)) return; // nothing to fill here: the panel keeps saying what to click
+    if (!isForm(fields)) return null; // nothing to fill here: the panel keeps saying what to click
     const needs = [];
     for (const f of fields) {
       const done = isDone(f) && !picks.has(f.el);
@@ -664,17 +757,22 @@
     const cap = captchaBox();
     if (captchaChallenge() || cap) needs.unshift({ el: cap || null, text: "Complete the CAPTCHA (I can't do that for you)" });
     const next = nextButton();
-    const filled = `${state.filled} filled` + (state.byAI ? `, ${state.byAI} written by AI (please read them)` : "");
+    keepButtonsVisible(next);
+    const filled = `${state.filled} filled` + (state.byAI ? `, ${state.byAI} written by AI (please read them)` : "")
+      + (record.resume?.tailored ? `, resume matched to this job (${record.resume.added.length} keywords)` : "");
     if (needs.length) {
       panel.status(`${filled}. ${needs.length} thing${needs.length === 1 ? "" : "s"} need${needs.length === 1 ? "s" : ""} you.`, "warn");
       panel.needs(needs, "I'll carry on by myself once you've done these.");
       panel.showContinue(false);
     } else {
-      panel.status(next ? `This page is done: ${filled}. Check it, then Continue.`
+      panel.status(next ? (auto?.run ? `This page is done: ${filled}.` : `This page is done: ${filled}. Check it, then Continue.`)
                         : `All done: ${filled}. Check everything, then click Submit yourself.`, "ok");
-      panel.needs([], "");
-      panel.showContinue(!!next);
+      panel.needs([], record.resume?.missing?.length && !next
+        ? `The job also asks for: ${record.resume.missing.slice(0, 8).join(", ")}. Your resume doesn't show these, so they weren't added; if you have them, add them on the website.`
+        : "");
+      panel.showContinue(!!next && !auto?.run);
     }
+    return { needs, next };
   }
 
   // ── keep watching: the user's own edits, new steps, the confirmation page ──

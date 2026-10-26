@@ -66,6 +66,7 @@ export interface ProfileData {
   languages?: Entry[];
   certifications?: Entry[];
   answers?: { question: string; answer: string }[];
+  preferences?: { tailor_resume?: boolean };
 }
 
 export interface ProfileResponse {
@@ -87,7 +88,7 @@ export interface Job {
   fresh_at: string;
   tech_category: string | null;
   company: string;
-  application: "opened" | "submitted" | null;
+  application: "opened" | "filled" | "submitted" | null;
 }
 
 export interface Application {
@@ -96,7 +97,24 @@ export interface Application {
   url: string;
   title: string;
   company: string;
-  status: "opened" | "submitted";
+  status: "opened" | "filled" | "submitted";
   created_at: string;
   updated_at: string;
+  submitted_at: string | null;
+  has_proof: boolean;
+  details: {
+    filled?: { label: string; value: string; source: string }[];
+    needs?: string[];
+    resume?: { name: string; tailored: boolean; added: string[]; missing: string[]; note: string | null } | null;
+    account?: { site: string; created: boolean } | null;
+    confirmation?: string;
+    site?: string;
+  };
+}
+
+/** An image the API sends (e.g. an application's confirmation screenshot), as a URL for <img>. */
+export async function imageUrl(path: string): Promise<string> {
+  const res = await fetch(`/api/fill${path}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+  if (!res.ok) throw new ApiError(res.statusText, res.status);
+  return URL.createObjectURL(await res.blob());
 }

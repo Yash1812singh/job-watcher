@@ -6,7 +6,11 @@ site has its own accounts, so it isn't behind the Job Watcher site password.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 import io
+import logging
 import os
 import time
 import zipfile
@@ -21,8 +25,10 @@ from urllib.parse import parse_qsl, urlparse
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from . import accounts, autofill, db
+from . import accounts, autofill, db, tailor
 from .scraper import detect_ats
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/fill", tags=["fill with ai"])
 EXTENSION_DIR = Path(os.environ.get("JOB_WATCHER_EXTENSION_DIR", Path(__file__).resolve().parents[2] / "extension"))
@@ -261,6 +267,80 @@ def resume_for_extension(user: dict = Depends(extension_user)) -> Response:
     return _resume_response(user["id"])
 
 
+class TailorRequest(BaseModel):
+    job_id: int | None = None
+    url: str = Field(default="", max_length=2000)
+    page_text: str = Field(default="", max_length=20000)
+
+
+@router.post("/tailored-resume")
+def tailored_resume(body: TailorRequest, user: dict = Depends(extension_user)) -> dict:
+    """The user's resume tailored to this job (keywords and wording only; see tailor.py), as base64.
+    Falls back to the original resume, with a note, whenever tailoring isn't possible."""
+    stored = accounts.get_resume(user["id"])
+    if stored is None:
+        raise HTTPException(404, "No resume uploaded yet.")
+    name, pdf = stored
+    plain = {"name": name, "b64": base64.b64encode(pdf).decode(), "tailored": False, "added": [], "missing": []}
+    data = accounts.get_profile(user["id"])["data"]
+    if (data.get("preferences") or {}).get("tailor_resume") is False:
+        return {**plain, "note": "Tailoring is off in your profile; used your resume as it is."}
+    if not autofill.groq_key():
+        return {**plain, "note": "The server has no AI key, so your resume was used as it is."}
+    info = accounts.job_info(body.job_id) if body.job_id else None
+    url = (info or {}).get("url") or body.url
+    skills = autofill.profile_from_dict(data).skills
+    resume_hash = tailor.fingerprint(hashlib.sha256(pdf).hexdigest())
+    version = tailor.fingerprint(resume_hash, sorted(skills))
+    job_key = f"job:{body.job_id}" if body.job_id else "url:" + tailor.fingerprint(url.split("#")[0])
+    cached = accounts.tailored(user["id"], job_key, version)
+    if cached:
+        return {**plain, "b64": base64.b64encode(cached["pdf"]).decode(), "tailored": cached["pdf"] != pdf,
+                "added": cached["added"], "missing": cached["missing"]}
+    try:
+        read = accounts.resume_sections(user["id"])
+        if read is None or read[0] != resume_hash:
+            text = tailor.extract_text(pdf)
+            try:
+                sections = tailor.structure(text)
+            except (ValueError, json.JSONDecodeError) as e:
+                sections = {"_error": str(e)}   # remembered, so an unreadable resume isn't retried every job
+            accounts.save_resume_sections(user["id"], resume_hash, text, sections)
+            read = (resume_hash, text, sections)
+        _, text, sections = read
+        if "_error" in sections:
+            return {**plain, "note": f"Used your resume as it is: {sections['_error']}."}
+        description = tailor.job_description(url, body.page_text)
+        result = tailor.tailor(sections, text, skills, description, (info or {}).get("title", ""), (info or {}).get("company", ""))
+        # nothing reworded: keep the user's own design
+        out = pdf if result["resume"] == sections else tailor.render_pdf(result["resume"])
+        accounts.save_tailored(user["id"], job_key, version, out, result["added"], result["missing"])
+        return {**plain, "b64": base64.b64encode(out).decode(), "tailored": out != pdf,
+                "added": result["added"], "missing": result["missing"]}
+    except Exception as e:  # tailoring must never stop an application
+        log.exception("tailoring failed for user=%s", user["id"])
+        return {**plain, "note": f"Used your resume as it is (tailoring failed: {str(e)[:120]})."}
+
+
+class SkillsAdd(BaseModel):
+    skills: list[str] = Field(max_length=50)
+
+
+@router.post("/profile/skills")
+def add_skills(body: SkillsAdd, user: dict = Depends(current_user)) -> dict:
+    """Skills the user confirmed they have (from a job's "missing" keywords): added to their profile,
+    so tailored resumes can use them from now on."""
+    data = accounts.get_profile(user["id"])["data"]
+    have = [s.strip() for s in re.split(r"[,\n]", str(data.get("skills") or "")) if s.strip()]
+    for s in body.skills:
+        s = s.strip()[:60]
+        if s and s.lower() not in {h.lower() for h in have}:
+            have.append(s)
+    data["skills"] = ", ".join(have)
+    accounts.save_profile(user["id"], data)
+    return _summary(user["id"])
+
+
 # ── Jobs and applications ────────────────────────────────────────────────────
 
 @router.get("/jobs")
@@ -294,18 +374,48 @@ def list_applications(user: dict = Depends(current_user)) -> list[dict]:
     return accounts.applications(user["id"])
 
 
+MAX_PROOF_BYTES = 2 * 1024 * 1024
+
+
 class ApplicationReport(BaseModel):
     job_id: int | None = None
     url: str = Field(default="", max_length=2000)
     title: str = Field(default="", max_length=300)
-    status: Literal["opened", "submitted"]
+    status: Literal["opened", "filled", "submitted"]
+    details: dict = Field(default_factory=dict)
+    proof_b64: str | None = Field(default=None, max_length=MAX_PROOF_BYTES * 4 // 3 + 4)
+
+    @field_validator("details")
+    @classmethod
+    def _small(cls, v: dict) -> dict:
+        if len(json.dumps(v)) > 200_000:
+            raise ValueError("details too large")
+        return v
 
 
 @router.post("/applications", status_code=204, response_class=Response)
 def report_application(body: ApplicationReport, user: dict = Depends(extension_user)) -> Response:
-    """The extension saw the form opened, or the confirmation page after the user submitted."""
-    accounts.record_application(user["id"], body.job_id, body.status, body.url, body.title)
+    """From the extension: the form was opened, filled (ready for the user to submit), or submitted
+    (it saw the confirmation page; with a screenshot of it as proof)."""
+    proof = None
+    if body.proof_b64:
+        try:
+            proof = base64.b64decode(body.proof_b64.split(",", 1)[-1], validate=True)
+        except ValueError:
+            raise HTTPException(422, "The screenshot isn't valid.")
+        if not proof.startswith((b"\xff\xd8", b"\x89PNG")):
+            raise HTTPException(422, "The screenshot isn't an image.")
+    accounts.record_application(user["id"], body.job_id, body.status, body.url, body.title, details=body.details, proof=proof)
     return Response(status_code=204)
+
+
+@router.get("/applications/{application_id}/proof")
+def application_proof(application_id: int, user: dict = Depends(current_user)) -> Response:
+    image = accounts.application_proof(user["id"], application_id)
+    if image is None:
+        raise HTTPException(404, "No screenshot for this application.")
+    return Response(image, media_type="image/png" if image.startswith(b"\x89PNG") else "image/jpeg",
+                    headers={"Cache-Control": "private, max-age=86400"})
 
 
 def application_url(job_url: str, site_url: str = "") -> str:

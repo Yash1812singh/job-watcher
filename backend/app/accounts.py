@@ -44,18 +44,50 @@ CREATE TABLE IF NOT EXISTS fill_applications (
     url        TEXT NOT NULL,
     title      TEXT NOT NULL DEFAULT '',
     company    TEXT NOT NULL DEFAULT '',
-    status     TEXT NOT NULL,                -- opened | submitted
+    status     TEXT NOT NULL,                -- opened | filled (ready for the user to submit) | submitted
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    details    TEXT NOT NULL DEFAULT '{}',   -- what was filled, the resume used, what was left for the user
+    proof      BLOB,                         -- screenshot of the confirmation page
+    submitted_at TEXT,
     UNIQUE (user_id, job_id)
 );
+-- the user's resume read into sections (see tailor.py), redone when the resume changes
+CREATE TABLE IF NOT EXISTS fill_resume_sections (
+    user_id     INTEGER PRIMARY KEY REFERENCES fill_users(id) ON DELETE CASCADE,
+    resume_hash TEXT NOT NULL,
+    text        TEXT NOT NULL,
+    sections    TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+-- the resume tailored to a job, kept so the same job gets the same resume
+CREATE TABLE IF NOT EXISTS fill_tailored (
+    user_id    INTEGER NOT NULL REFERENCES fill_users(id) ON DELETE CASCADE,
+    job_key    TEXT NOT NULL,
+    version    TEXT NOT NULL,               -- resume + skills it was made from
+    pdf        BLOB NOT NULL,
+    added      TEXT NOT NULL DEFAULT '[]',
+    missing    TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, job_key)
+);
 """
+# columns added to tables created by an earlier version
+MIGRATIONS = [
+    ("fill_applications", "details", "TEXT NOT NULL DEFAULT '{}'"),
+    ("fill_applications", "proof", "BLOB"),
+    ("fill_applications", "submitted_at", "TEXT"),
+]
 
 MAX_RESUME_BYTES = 5 * 1024 * 1024
 
 
 def init() -> None:
     with db.connect() as conn:
+        for table, column, decl in MIGRATIONS:
+            exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+            if exists and column not in {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
         conn.executescript(SCHEMA)
 
 
@@ -136,6 +168,8 @@ def log_in(email: str, password: str) -> tuple[dict, str]:
 def delete_user(user_id: int) -> None:
     with db.connect() as conn:
         conn.execute("DELETE FROM fill_applications WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM fill_resume_sections WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM fill_tailored WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM fill_tokens WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM fill_profiles WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM fill_users WHERE id = ?", (user_id,))
@@ -201,9 +235,14 @@ def job_info(job_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def record_application(user_id: int, job_id: int | None, status: str, url: str = "", title: str = "", company: str = "") -> None:
-    """opened when the panel starts on a job's form; submitted when it sees the confirmation page.
-    Never goes back from submitted to opened."""
+STATUS_ORDER = {"opened": 0, "filled": 1, "submitted": 2}
+
+
+def record_application(user_id: int, job_id: int | None, status: str, url: str = "", title: str = "", company: str = "",
+                       details: dict | None = None, proof: bytes | None = None) -> None:
+    """opened when the panel starts on a job's form; filled when every page it could do is done and
+    the form is ready for the user to submit; submitted when it sees the confirmation page. Never goes
+    back (submitted stays submitted). details are merged into what's recorded; lists are added to."""
     if job_id:
         info = job_info(job_id)
         if info:
@@ -212,18 +251,79 @@ def record_application(user_id: int, job_id: int | None, status: str, url: str =
         return
     now = db.now_iso()
     with db.connect() as conn:
-        existing = conn.execute("SELECT id, status FROM fill_applications WHERE user_id = ? AND "
+        existing = conn.execute("SELECT id, status, details FROM fill_applications WHERE user_id = ? AND "
                                 + ("job_id = ?" if job_id else "job_id IS NULL AND url = ?"), (user_id, job_id or url)).fetchone()
         if existing:
-            if not (existing["status"] == "submitted" and status == "opened"):
-                conn.execute("UPDATE fill_applications SET status = ?, updated_at = ? WHERE id = ?", (status, now, existing["id"]))
+            if STATUS_ORDER.get(status, 0) < STATUS_ORDER.get(existing["status"], 0):
+                status = existing["status"]
+            merged = _merge(json.loads(existing["details"] or "{}"), details or {})
+            conn.execute("""UPDATE fill_applications SET status = ?, updated_at = ?, details = ?,
+                            proof = COALESCE(?, proof), submitted_at = COALESCE(submitted_at, ?) WHERE id = ?""",
+                         (status, now, json.dumps(merged), proof, now if status == "submitted" else None, existing["id"]))
         else:
-            conn.execute("""INSERT INTO fill_applications (user_id, job_id, url, title, company, status, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (user_id, job_id, url, title, company, status, now, now))
+            conn.execute("""INSERT INTO fill_applications (user_id, job_id, url, title, company, status, created_at, updated_at,
+                                                          details, proof, submitted_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                         (user_id, job_id, url, title, company, status, now, now, json.dumps(details or {}), proof,
+                          now if status == "submitted" else None))
+
+
+def _merge(old: dict, new: dict) -> dict:
+    """Details from several pages of one application: what was filled adds up page by page (without
+    repeats); the rest (what's left for the user, the resume used…) is the latest."""
+    out = dict(old)
+    for k, v in new.items():
+        if v is None:                     # a later page that didn't see it (e.g. the confirmation page)
+            continue
+        if k == "filled" and isinstance(v, list) and isinstance(out.get(k), list):
+            seen = {json.dumps(x, sort_keys=True) for x in out[k]}
+            out[k] = out[k] + [x for x in v if json.dumps(x, sort_keys=True) not in seen]
+        else:
+            out[k] = v
+    return out
 
 
 def applications(user_id: int) -> list[dict]:
     with db.connect() as conn:
-        rows = conn.execute("""SELECT id, job_id, url, title, company, status, created_at, updated_at FROM fill_applications
-                               WHERE user_id = ? ORDER BY updated_at DESC LIMIT 500""", (user_id,)).fetchall()
-    return [dict(r) for r in rows]
+        rows = conn.execute("""SELECT id, job_id, url, title, company, status, created_at, updated_at, submitted_at, details,
+                                      proof IS NOT NULL AS has_proof
+                               FROM fill_applications WHERE user_id = ? ORDER BY updated_at DESC LIMIT 500""", (user_id,)).fetchall()
+    return [{**dict(r), "details": json.loads(r["details"] or "{}"), "has_proof": bool(r["has_proof"])} for r in rows]
+
+
+def application_proof(user_id: int, application_id: int) -> bytes | None:
+    with db.connect() as conn:
+        row = conn.execute("SELECT proof FROM fill_applications WHERE id = ? AND user_id = ?", (application_id, user_id)).fetchone()
+    return bytes(row["proof"]) if row and row["proof"] else None
+
+
+# ── Tailored resumes ─────────────────────────────────────────────────────────
+
+def resume_sections(user_id: int) -> tuple[str, str, dict] | None:
+    """(resume hash, text, sections) as last read, or None."""
+    with db.connect() as conn:
+        row = conn.execute("SELECT resume_hash, text, sections FROM fill_resume_sections WHERE user_id = ?", (user_id,)).fetchone()
+    return (row["resume_hash"], row["text"], json.loads(row["sections"])) if row else None
+
+
+def save_resume_sections(user_id: int, resume_hash: str, text: str, sections: dict) -> None:
+    with db.connect() as conn:
+        conn.execute("""INSERT INTO fill_resume_sections (user_id, resume_hash, text, sections, created_at) VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(user_id) DO UPDATE SET resume_hash = excluded.resume_hash, text = excluded.text,
+                        sections = excluded.sections, created_at = excluded.created_at""",
+                     (user_id, resume_hash, text, json.dumps(sections), db.now_iso()))
+
+
+def tailored(user_id: int, job_key: str, version: str) -> dict | None:
+    with db.connect() as conn:
+        row = conn.execute("SELECT pdf, added, missing FROM fill_tailored WHERE user_id = ? AND job_key = ? AND version = ?",
+                           (user_id, job_key, version)).fetchone()
+    return {"pdf": bytes(row["pdf"]), "added": json.loads(row["added"]), "missing": json.loads(row["missing"])} if row else None
+
+
+def save_tailored(user_id: int, job_key: str, version: str, pdf: bytes, added: list, missing: list) -> None:
+    with db.connect() as conn:
+        conn.execute("""INSERT INTO fill_tailored (user_id, job_key, version, pdf, added, missing, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(user_id, job_key) DO UPDATE SET version = excluded.version, pdf = excluded.pdf,
+                        added = excluded.added, missing = excluded.missing, created_at = excluded.created_at""",
+                     (user_id, job_key, version, pdf, json.dumps(added), json.dumps(missing), db.now_iso()))
