@@ -17,7 +17,7 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app/backend
 COPY backend/requirements.txt ./
 # Playwright's own Chromium works on both x86 and ARM servers (Google Chrome is x86-only on Linux).
-RUN pip install --no-cache-dir -r requirements.txt playwright==1.49.1 huggingface_hub==2.2.0 \
+RUN pip install --no-cache-dir -r requirements.txt playwright==1.49.1 \
  && playwright install --with-deps chromium \
  && rm -rf /var/lib/apt/lists/*
 # Hosts like Hugging Face Spaces run the container as a non-root user.
