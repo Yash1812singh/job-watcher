@@ -11,7 +11,7 @@ REPO="${JOB_WATCHER_BACKUP_REPO:?set JOB_WATCHER_BACKUP_REPO to your backup data
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "Downloading the latest backup from $REPO…"
+echo "Downloading the latest backup from ${REPO}…"
 "$ROOT/backend/.venv/bin/python" - "$REPO" "$TMP" <<'PY'
 import sys
 from huggingface_hub import hf_hub_download
