@@ -343,11 +343,29 @@ def add_skills(body: SkillsAdd, user: dict = Depends(current_user)) -> dict:
 
 # ── Jobs and applications ────────────────────────────────────────────────────
 
+# a title above an early-career level
+SENIOR = re.compile(r"\b(senior|sr|staff|principal|lead|leader|manager|mgr|director|head|architect|vp|vice president|avp|"
+                    r"distinguished|fellow|chief|iii|iv|l[5-9])\b|\bsde[\s-]*(3|iii)\b", re.I)
+YEARS = re.compile(r"(\d{1,2})\s*(?:\+|-|–|to)?\s*(?:\d{1,2})?\s*\+?\s*(?:yrs|years)", re.I)
+SOFTWARE = ("Software Engineering", "Cloud, DevOps & Infrastructure")
+
+
+def fits(title: str, years: float) -> bool:
+    """Would someone with this many years be considered: no senior title, no title asking for more
+    than a couple of years beyond theirs ("(6-8 Yrs)" is out at 1 year)."""
+    if years < 5 and SENIOR.search(title):
+        return False
+    asked = YEARS.search(title)
+    return not asked or int(asked.group(1)) <= max(years, 0) + 2
+
+
 @router.get("/jobs")
 def jobs(q: str = "", india: bool = True, tech: bool = True, within_minutes: int = Query(30, ge=1, le=30 * 24 * 60),
-         limit: int = Query(100, ge=1, le=500), user: dict = Depends(current_user)) -> list[dict]:
+         limit: int = Query(100, ge=1, le=500), software: bool = False, fit: bool = False,
+         user: dict = Depends(current_user)) -> list[dict]:
     """Open jobs posted in the last `within_minutes` (30 by default, like Job Watcher), newest first,
-    with this user's application status."""
+    with this user's application status. software: software and cloud roles only; fit: only roles
+    that suit the experience in the user's profile."""
     where = ["j.is_active = 1", "j.fresh_at >= ?"]
     params: list = [db.to_iso(datetime.now(timezone.utc) - timedelta(minutes=within_minutes))]
     if india:
@@ -357,13 +375,21 @@ def jobs(q: str = "", india: bool = True, tech: bool = True, within_minutes: int
     if q.strip():
         where.append("(j.title LIKE ? OR s.name LIKE ? OR j.location LIKE ?)")
         params += [f"%{q.strip()}%"] * 3
+    if software:
+        where.append(f"j.tech_category IN ({','.join('?' * len(SOFTWARE))})")
+        params += list(SOFTWARE)
     sql = f"""SELECT j.id, j.title, j.url, j.location, j.department, j.fresh_at, j.tech_category, s.name AS company,
                      s.url AS site_url, a.status AS application
               FROM jobs j JOIN sites s ON s.id = j.site_id
               LEFT JOIN fill_applications a ON a.job_id = j.id AND a.user_id = ?
               WHERE {' AND '.join(where)} ORDER BY j.fresh_at DESC, j.id DESC LIMIT ?"""
     with db.connect() as conn:
-        rows = [dict(r) for r in conn.execute(sql, (user["id"], *params, limit))]
+        # (with the experience filter, read more and keep the ones that fit)
+        rows = [dict(r) for r in conn.execute(sql, (user["id"], *params, limit * 4 if fit else limit))]
+    if fit:
+        years_text = str((accounts.get_profile(user["id"])["data"].get("work") or {}).get("years") or "0")
+        years = float((re.search(r"\d+(?:\.\d+)?", years_text) or [0])[0])
+        rows = [r for r in rows if fits(r["title"], years)][:limit]
     for r in rows:
         r["apply_url"] = application_url(r["url"], r.pop("site_url") or "")
     return rows

@@ -118,7 +118,7 @@ class Profile:
     veteran: str = ""
     disability: str = ""
     # how you heard
-    how_heard: str = "LinkedIn"
+    how_heard: str = ""   # unset: "Company website" (where Job Watcher finds the jobs)
     referral_name: str = ""
     # documents
     cover_letter: str = ""  # template; {company} and {role} are filled in
@@ -264,7 +264,7 @@ RULES: list[tuple[re.Pattern, object]] = [(re.compile(p, re.I), a) for p, a in [
     (r"\b(last\s*name|surname|family\s*name)", lambda p: p.last_name),
     (r"middle\s*name", lambda p: ""),
     (r"preferred\s*(first\s*)?name|nick\s*name|known\s*as", lambda p: p.preferred_name or p.first_name),
-    (r"^(?!.*(company|employer|school|universit|college|institut|referr|manager|father|mother|spouse|emergency|recruiter)).*\b(full\s*|legal\s*)?name\b",
+    (r"^(?!.*(company|employer|employee|school|universit|college|institut|referr|manager|father|mother|spouse|emergency|recruiter|hear|learn|source)).*\b(full\s*|legal\s*)?name\b",
      lambda p: p.full_name),
     (r"e-?mail", lambda p: p.email),
     (r"(alternate|alternative|secondary|other)\s*(phone|mobile|number)", lambda p: p.alt_phone),
@@ -297,7 +297,9 @@ RULES: list[tuple[re.Pattern, object]] = [(re.compile(p, re.I), a) for p, a in [
     (r"currently\s*(employed|working)|employment\s*status", lambda p: p.employment_status),
     (r"fixed\s*(ctc|salary|pay|component)", lambda p: p.current_fixed or p.current_salary),
     (r"variable\s*(ctc|pay|component)|bonus", lambda p: p.current_variable),
-    (r"(expected|desired)\s*(total\s*|annual\s*)?(ctc|salary|compensation|pay)|salary\s*expectation", lambda p: p.desired_salary),
+    (r"(expected|desired)\s*(total\s*|annual\s*)?(ctc|salary|compensation|pay)|salary\s*expectation|"
+     r"(minimum|required|target)\b.{0,30}(salary|compensation|ctc|pay)|(salary|compensation|ctc).{0,40}(require|expect|looking\s*for)",
+     lambda p: p.desired_salary),
     (r"(current|present)\s*(total\s*|annual\s*)?(ctc|salary|compensation)", lambda p: p.current_salary),
     (r"reason\s*for\s*(leaving|change|switch|job\s*change)|why\s*(are\s*you\s*)?(leaving|looking|switch|changing)",
      lambda p: p.reason_for_change or OPEN),
@@ -305,6 +307,9 @@ RULES: list[tuple[re.Pattern, object]] = [(re.compile(p, re.I), a) for p, a in [
     (r"(current|present|most\s*recent)\s*(company|employer|organi[sz]ation)|^company(\s*name)?$|^org", lambda p: p.current_company),
     (r"(current|present)\s*(title|role|position|designation)|job\s*title|^title$", lambda p: p.current_title),
     (r"relevant\s*(years|experience)|years.{0,30}experience\s*(in|with)\s", lambda p: p.relevant_years or OPEN),
+    # experience in one particular thing ("Experience in K8s upgrade? Please elaborate"): the AI answers from
+    # what the profile shows, never with the applicant's total years
+    (r"^(?!.*\b(total|overall|professional|work|industry)\s*experience).*\bexperience\s*(in|with|on|using)\s+\w", lambda p: OPEN),
     (r"years?\s*(of)?\s*(professional\s*|total\s*|work\s*|overall\s*)?experience|how\s*many\s*years|total\s*experience", lambda p: p.years),
     (r"address\s*line\s*2|apartment|suite", lambda p: ""),
     (r"street|address(\s*line\s*1)?\b|residential\s*address", lambda p: p.address or p.location),
@@ -321,7 +326,7 @@ RULES: list[tuple[re.Pattern, object]] = [(re.compile(p, re.I), a) for p, a in [
     (r"language", lambda p: _languages(p)),
     (r"certifications?\b|licen[cs]es?", lambda p: ", ".join(c.get("name", "") for c in p.certifications if c.get("name")) or OPEN),
     (r"referr(ed|al)\s*by|who\s*referred|referrer|employee\s*referral|referral\s*name", lambda p: p.referral_name),
-    (r"how\s*did\s*you\s*(hear|find|learn|come)|^source$|where\s*did\s*you\s*(hear|find)", lambda p: p.how_heard or "LinkedIn"),
+    (r"how\s*did\s*you\s*(hear|find|learn|come)|^source$|where\s*did\s*you\s*(hear|find)", lambda p: p.how_heard or "Company website"),
     (r"(previously|ever)\s*(worked|been\s*employed)|former\s*employee", lambda p: NO),
     (r"(18|eighteen)\s*years|over\s*the\s*age|of\s*legal\s*age", lambda p: YES),
     (r"skills|tech(nical)?\s*stack|technologies", lambda p: ", ".join(p.skills[:20]) or OPEN),

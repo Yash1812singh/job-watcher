@@ -155,3 +155,17 @@ def test_total_compensation_wording():
     assert autofill.rule_answer("What is your expected total compensation (CTC) for your next role?", p) == "26 LPA"
     assert autofill.rule_answer("Please share your expected total CTC in INR (Lakhs per annum).", p) == "26 LPA"
     assert autofill.rule_answer("Current CTC", p) == "18 LPA"
+
+
+def test_wordings_seen_on_real_forms():
+    p = autofill.Profile(first_name="Yash", last_name="Singh", years="1")
+    hear = "How did you hear about this job? (If through one of our current employees, please list their name)"
+    assert autofill.rule_answer(hear, p) == "Company website"
+    assert autofill.rule_answer("Full name", p) == "Yash Singh"
+    k8s = "Experience in K8S upgrade, If yes, please elaborate on your years of experience"
+    assert autofill.rule_answer(k8s, p) is None                         # for the AI, from the profile; never "1"
+    assert autofill.rule_answer("Total years of experience", p) == "1"
+    assert autofill.rule_answer("Years of professional experience", p) == "1"
+    salary = "What is your minimum required yearly salary (in INR) to consider a new position?"
+    assert autofill.rule_answer(salary, p) == ""                        # the profile has none: left for the user
+    assert autofill.rule_answer(salary, autofill.Profile(desired_salary="12 LPA")) == "12 LPA"

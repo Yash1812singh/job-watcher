@@ -139,3 +139,11 @@ def test_applications_keep_details_and_proof_and_never_go_back(client):
     assert post(status="submitted", proof_b64=base64.b64encode(b"<script>").decode()).status_code == 422
     other = client.post("/api/fill/signup", json={"name": "B", "email": "b@example.com", "password": "correct horse"}).json()["token"]
     assert client.get(f"/api/fill/applications/{a['id']}/proof", headers={"Authorization": f"Bearer {other}"}).status_code == 404
+
+
+def test_a_version_the_resume_does_not_state_still_counts_as_the_skill(monkeypatch):
+    monkeypatch.setattr(autofill, "_ai", lambda *a, **k: json.dumps({"evidence": {}}))
+    text = "Backend development with Java (Spring Boot) and Python (Django)."
+    found = tailor.supported(["Java 17", "Spring Boot 3", "Kubernetes"], text, [])
+    assert found == {"Java 17": "Java", "Spring Boot 3": "Spring Boot"}      # Kubernetes really is missing
+    assert tailor._base("Spring Boot 3.x") == "Spring Boot" and tailor._base("C++") == "C++" and tailor._base("Python") == "Python"

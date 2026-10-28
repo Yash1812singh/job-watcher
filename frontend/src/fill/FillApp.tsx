@@ -226,6 +226,13 @@ function JobsTab({ ext, profilePct, go }: { ext: ExtState; profilePct: number; g
   const [q, setQ] = useState("");
   const [india, setIndia] = useState(true);
   const [tech, setTech] = useState(true);
+  // software roles only, and only roles that fit the experience in the profile (both remembered)
+  const remembered = (k: string) => { try { return localStorage.getItem(`fill-with-ai.${k}`) !== "0"; } catch { return true; } };
+  const [software, setSoftwareState] = useState(() => remembered("software"));
+  const [fit, setFitState] = useState(() => remembered("fit"));
+  const remember = (k: string, v: boolean) => { try { localStorage.setItem(`fill-with-ai.${k}`, v ? "1" : "0"); } catch { /* private mode */ } };
+  const setSoftware = (v: boolean) => { setSoftwareState(v); remember("software", v); };
+  const setFit = (v: boolean) => { setFitState(v); remember("fit", v); };
   const [within, setWithinState] = useState(() => {
     try {
       const v = localStorage.getItem(WINDOW_KEY) ?? "";
@@ -241,9 +248,10 @@ function JobsTab({ ext, profilePct, go }: { ext: ExtState; profilePct: number; g
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [error, setError] = useState("");
   const load = useCallback(() => {
-    const params = new URLSearchParams({ q, india: String(india), tech: String(tech), within_minutes: within, limit: "200" });
+    const params = new URLSearchParams({ q, india: String(india), tech: String(tech), software: String(software), fit: String(fit),
+                                         within_minutes: within, limit: "200" });
     api<Job[]>(`/jobs?${params}`).then((j) => { setJobs(j); setError(""); }).catch((e) => setError((e as Error).message));
-  }, [q, india, tech, within]);
+  }, [q, india, tech, software, fit, within]);
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
@@ -291,6 +299,8 @@ function JobsTab({ ext, profilePct, go }: { ext: ExtState; profilePct: number; g
         <input aria-label="Search jobs" placeholder="Search title, company or city" value={q} onChange={(e) => setQ(e.target.value)} />
         <label className="f-check"><input type="checkbox" checked={india} onChange={(e) => setIndia(e.target.checked)} /> India only</label>
         <label className="f-check"><input type="checkbox" checked={tech} onChange={(e) => setTech(e.target.checked)} /> Tech roles only</label>
+        <label className="f-check" title="Software engineering, cloud and DevOps roles"><input type="checkbox" checked={software} onChange={(e) => setSoftware(e.target.checked)} /> Software roles</label>
+        <label className="f-check" title="Hides Senior, Staff, Lead, Manager… and roles asking for more years than your profile shows"><input type="checkbox" checked={fit} onChange={(e) => setFit(e.target.checked)} /> Fits my experience</label>
         <label className="f-check">Posted in the last
           <select value={within} onChange={(e) => setWithin(e.target.value)}>
             {WINDOWS.map(([m, label]) => <option key={m} value={m}>{label}</option>)}

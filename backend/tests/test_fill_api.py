@@ -162,3 +162,11 @@ def test_config_says_where_the_store_listing_is(client, monkeypatch):
     assert client.get("/api/fill/config").json() == {"store_url": "", "edge_url": "", "firefox_url": ""}
     monkeypatch.setenv("FILL_EXTENSION_STORE_URL", "https://chromewebstore.google.com/detail/fill-with-ai/abc")
     assert client.get("/api/fill/config").json()["store_url"].endswith("/abc")
+
+
+def test_jobs_can_be_limited_to_roles_that_fit_the_users_experience():
+    from app.fill_api import fits
+    assert fits("SDE-1", 1) and fits("Software Engineer II", 1) and fits("Backend Engineer (2+ years)", 1)
+    assert not fits("Senior Backend Engineer", 1) and not fits("Staff Engineer", 1) and not fits("Engineering Manager", 1)
+    assert not fits("Advance Software Engineer (6-8 Yrs)", 1) and not fits("Software Engineer III", 1)
+    assert fits("Senior Backend Engineer", 7)                            # someone with 7 years is senior

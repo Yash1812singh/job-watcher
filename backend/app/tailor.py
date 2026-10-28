@@ -154,6 +154,11 @@ def _squash(t: str) -> str:
     return re.sub(r"[^a-z0-9+#]+", " ", (t or "").lower()).strip()
 
 
+def _base(keyword: str) -> str:
+    """"Java 17" -> "Java", "Spring Boot 3.x" -> "Spring Boot": the skill without a version."""
+    return re.sub(r"[\s-]*v?\d+(?:\.[\dx]+)*\+?$", "", keyword.strip(), flags=re.I).strip() or keyword
+
+
 def supported(wanted: list[str], resume_text: str, profile_skills: list[str]) -> dict[str, str]:
     """{keyword: evidence} for the job's keywords the user's resume or profile shows. A keyword is
     shown if it's written there (or a synonym is), or if the AI quotes a line of the resume that
@@ -161,6 +166,9 @@ def supported(wanted: list[str], resume_text: str, profile_skills: list[str]) ->
     doesn't count."""
     shown_in = resume_text + "\n" + ", ".join(profile_skills)
     found = {k: k for k in wanted if _has(shown_in, k)}
+    # a version the resume doesn't state still counts as the skill it shows ("Java 17" for "Java");
+    # only the plain skill name is ever written into the resume
+    found.update({k: _base(k) for k in wanted if k not in found and _base(k) != k and _has(shown_in, _base(k))})
     rest = [k for k in wanted if k not in found]
     if not rest:
         return found
@@ -221,7 +229,8 @@ def tailor(resume: dict, resume_text: str, profile_skills: list[str], descriptio
     """{"resume": tailored sections, "added": keywords now used, "missing": job keywords the user doesn't show}"""
     wanted = keywords(description)
     evidence = supported(wanted, resume_text, profile_skills)
-    have = [k for k in wanted if k in evidence]
+    # the term to use for each: the plain skill for a versioned keyword ("Java", not "Java 17")
+    have = list(dict.fromkeys(_base(k) if evidence[k] == _base(k) != k else k for k in wanted if k in evidence))
     missing = [k for k in wanted if k not in evidence]
     out = json.loads(json.dumps(resume))  # a copy; employers, titles, dates, education stay as they are
     if not wanted:

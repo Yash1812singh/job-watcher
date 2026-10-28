@@ -259,6 +259,21 @@
         options: e.tagName === "SELECT" ? [...e.options].map((o) => clean(o.text)) : seen.get(e) || [], el: e, ids: [e],
       });
     }
+    // answers given by pressing one of a few buttons (Ashby's Yes / No): a choice like radio buttons
+    const toggleGroups = new Map();
+    for (const b of all("button[aria-pressed], [role=button][aria-pressed]")) {
+      if (!visible(b) || b.closest?.("#fwai-panel-host")) continue;
+      const g = toggleGroups.get(b.parentElement) || [];
+      g.push(b);
+      toggleGroups.set(b.parentElement, g);
+    }
+    for (const [box, buttons] of toggleGroups) {
+      if (buttons.length < 2 || buttons.length > 8) continue;
+      const id = `fwai-${run}-${n++}`;
+      box.dataset.fwai = id;
+      out.push({ id, kind: "radio", toggle: true, label: labelOf(box), name: "", options: buttons.map((b) => clean(b.innerText)),
+                 required: requiredNear(box), value: "", el: box, ids: buttons });
+    }
     // dropdowns that aren't <select> boxes: a button or box that opens a list of choices
     for (const e of all(DROPDOWN)) {
       if (!visible(e) || e.closest('[aria-hidden="true"]') || e.getAttribute("aria-disabled") === "true") continue;
@@ -286,10 +301,12 @@
   // a "*" next to the question (custom dropdowns can't be marked required the usual way)
   function requiredNear(e) {
     const box = closestDeep(e, 'fieldset, [class*="field"], [class*="Field"], [class*="question"], [class*="form-group"], [data-automation-id^="formField"]');
-    return /[*✱]/.test(box?.querySelector('label, legend, [class*="label"], [class*="Label"]')?.innerText || "");
+    const heading = box?.querySelector('label, legend, [class*="label"], [class*="Label"], [class*="title"]');
+    return /[*✱]/.test(heading?.innerText || "") || /required/i.test(heading?.className || "");
   }
 
   function isDone(f) {
+    if (f.toggle) return f.ids.some((b) => b.getAttribute("aria-pressed") === "true");
     if (f.kind === "radio" || f.kind === "checkbox") return f.ids.some((e) => e.checked);
     if (f.kind === "file") return !!(f.el.files && f.el.files.length) || !!f.el.dataset.fwaiFile;
     if (f.kind === "select") return !!f.el.value && f.el.selectedIndex > 0;
@@ -434,6 +451,13 @@
       }
       case "radio":
       case "checkbox": {
+        if (f.toggle) {
+          const button = f.ids[f.options.indexOf(value)];
+          if (!button) return false;
+          if (button.getAttribute("aria-pressed") !== "true") button.click();
+          await sleep(150);
+          return button.getAttribute("aria-pressed") === "true";
+        }
         if (f.ids.length === 1 && f.options.length === 0) { // a lone consent box
           if (!el.checked) el.click();
           return el.checked;
@@ -706,10 +730,15 @@
   // open for a few seconds). Click one dropdown to check; until it opens, wait instead of filling
   // into a page that ignores it. Returns false if the page redrew itself while waiting.
   async function interactive(fields, p) {
-    const probe = fields.find((f) => f.kind === "combobox" && f.el.getAttribute("aria-expanded") === "false");
+    // once per page, and only a react-select dropdown (a search box that opens as you type, like
+    // Ashby's location, never opens on a click and would keep it waiting)
+    if (state.probed === location.href) return true;
+    state.probed = location.href;
+    const probe = fields.find((f) => f.kind === "combobox" && f.el.getAttribute("aria-expanded") === "false"
+      && closestDeep(f.el, '[class*="select__control"], [class*="select__input-container"]'));
     if (!probe) return true;
     const el = probe.el;
-    for (let i = 0; i < 20 && el.isConnected; i++) {
+    for (let i = 0; i < 10 && el.isConnected; i++) {
       fire(el, ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]);
       for (let t = 0; t < 6; t++) {
         await sleep(150);
