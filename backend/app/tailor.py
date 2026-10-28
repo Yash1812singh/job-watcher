@@ -234,7 +234,7 @@ def tailor(resume: dict, resume_text: str, profile_skills: list[str], descriptio
     missing = [k for k in wanted if k not in evidence]
     out = json.loads(json.dumps(resume))  # a copy; employers, titles, dates, education stay as they are
     if not wanted:
-        return {"resume": out, "added": [], "missing": [], "keywords": []}
+        return {"resume": out, "added": [], "missing": [], "covered": [], "keywords": []}
 
     bullets = {}
     for i, e in enumerate(resume.get("experience", [])):
@@ -259,7 +259,7 @@ def tailor(resume: dict, resume_text: str, profile_skills: list[str], descriptio
     try:
         change = _json_from(reply)
     except (ValueError, json.JSONDecodeError):
-        return {"resume": out, "added": [], "missing": missing, "keywords": wanted}
+        return {"resume": out, "added": [], "missing": missing, "covered": [k for k in wanted if k not in missing], "keywords": wanted}
 
     allowed = have + profile_skills
     for key, new in (change.get("bullets") or {}).items():
@@ -281,7 +281,8 @@ def tailor(resume: dict, resume_text: str, profile_skills: list[str], descriptio
     before = json.dumps(resume)
     after = json.dumps(out)
     added = [k for k in have if _has(after, k) and (not _has(before, k) or after.count(k) > before.count(k))]
-    return {"resume": out, "added": added, "missing": missing, "keywords": wanted}
+    # covered: the job's keywords the resume (or profile) shows, whether or not any wording changed
+    return {"resume": out, "added": added, "missing": missing, "covered": [k for k in wanted if k not in missing], "keywords": wanted}
 
 
 # ── Writing the PDF ──────────────────────────────────────────────────────────

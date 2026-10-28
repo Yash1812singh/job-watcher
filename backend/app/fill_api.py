@@ -300,7 +300,7 @@ def tailored_resume(body: TailorRequest, user: dict = Depends(extension_user)) -
     if stored is None:
         raise HTTPException(404, "No resume uploaded yet.")
     name, pdf = stored
-    plain = {"name": name, "b64": base64.b64encode(pdf).decode(), "tailored": False, "added": [], "missing": []}
+    plain = {"name": name, "b64": base64.b64encode(pdf).decode(), "tailored": False, "added": [], "missing": [], "covered": []}
     data = accounts.get_profile(user["id"])["data"]
     if (data.get("preferences") or {}).get("tailor_resume") is False:
         return {**plain, "note": "Tailoring is off in your profile; used your resume as it is."}
@@ -315,7 +315,7 @@ def tailored_resume(body: TailorRequest, user: dict = Depends(extension_user)) -
     cached = accounts.tailored(user["id"], job_key, version)
     if cached:
         return {**plain, "b64": base64.b64encode(cached["pdf"]).decode(), "tailored": cached["pdf"] != pdf,
-                "added": cached["added"], "missing": cached["missing"]}
+                "added": cached["added"], "missing": cached["missing"], "covered": cached["covered"]}
     try:
         read = accounts.resume_sections(user["id"])
         if read is None or read[0] != resume_hash or "_pending" in read[2]:
@@ -333,9 +333,9 @@ def tailored_resume(body: TailorRequest, user: dict = Depends(extension_user)) -
         result = tailor.tailor(sections, text, skills, description, (info or {}).get("title", ""), (info or {}).get("company", ""))
         # nothing reworded: keep the user's own design
         out = pdf if result["resume"] == sections else tailor.render_pdf(result["resume"])
-        accounts.save_tailored(user["id"], job_key, version, out, result["added"], result["missing"])
+        accounts.save_tailored(user["id"], job_key, version, out, result["added"], result["missing"], result["covered"])
         return {**plain, "b64": base64.b64encode(out).decode(), "tailored": out != pdf,
-                "added": result["added"], "missing": result["missing"]}
+                "added": result["added"], "missing": result["missing"], "covered": result["covered"]}
     except Exception as e:  # tailoring must never stop an application
         log.exception("tailoring failed for user=%s", user["id"])
         return {**plain, "note": f"Used your resume as it is (tailoring failed: {str(e)[:120]})."}

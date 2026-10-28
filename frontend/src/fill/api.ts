@@ -105,7 +105,7 @@ export interface Application {
   details: {
     filled?: { label: string; value: string; source: string }[];
     needs?: string[];
-    resume?: { name: string; tailored: boolean; added: string[]; missing: string[]; note: string | null } | null;
+    resume?: { name: string; tailored: boolean; added: string[]; missing: string[]; covered?: string[]; note: string | null } | null;
     account?: { site: string; created: boolean } | null;
     confirmation?: string;
     site?: string;

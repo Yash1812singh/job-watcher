@@ -107,11 +107,12 @@ def test_tailored_resume_is_made_once_per_job(client, monkeypatch):
         calls.append(desc)
         out = json.loads(json.dumps(sections))
         out["skills"] = ["Monitoring", *out["skills"]]
-        return {"resume": out, "added": ["Monitoring"], "missing": ["Ruby"], "keywords": ["Monitoring", "Ruby"]}
+        return {"resume": out, "added": ["Monitoring"], "missing": ["Ruby"], "covered": ["Monitoring"], "keywords": ["Monitoring", "Ruby"]}
     monkeypatch.setattr(tailor, "tailor", fake_tailor)
     first = client.post("/api/fill/tailored-resume", headers=h, json={"url": "https://example.com/job/1"}).json()
     again = client.post("/api/fill/tailored-resume", headers=h, json={"url": "https://example.com/job/1#fill-with-ai"}).json()
-    assert first["tailored"] and first["added"] == ["Monitoring"] and first["missing"] == ["Ruby"]
+    assert first["tailored"] and first["added"] == ["Monitoring"] and first["missing"] == ["Ruby"] and first["covered"] == ["Monitoring"]
+    assert client.post("/api/fill/tailored-resume", headers=h, json={"url": "https://example.com/job/1"}).json()["covered"] == ["Monitoring"]
     assert again["b64"] == first["b64"] and len(calls) == 1          # the same job gets the same resume
 
     # the user says they do have Ruby: it goes into their profile, and the next resume is made afresh

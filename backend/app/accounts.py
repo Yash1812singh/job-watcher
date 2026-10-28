@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS fill_tailored (
     pdf        BLOB NOT NULL,
     added      TEXT NOT NULL DEFAULT '[]',
     missing    TEXT NOT NULL DEFAULT '[]',
+    covered    TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL,
     PRIMARY KEY (user_id, job_key)
 );
@@ -77,6 +78,7 @@ MIGRATIONS = [
     ("fill_applications", "details", "TEXT NOT NULL DEFAULT '{}'"),
     ("fill_applications", "proof", "BLOB"),
     ("fill_applications", "submitted_at", "TEXT"),
+    ("fill_tailored", "covered", "TEXT NOT NULL DEFAULT '[]'"),
 ]
 
 MAX_RESUME_BYTES = 5 * 1024 * 1024
@@ -316,14 +318,15 @@ def save_resume_sections(user_id: int, resume_hash: str, text: str, sections: di
 
 def tailored(user_id: int, job_key: str, version: str) -> dict | None:
     with db.connect() as conn:
-        row = conn.execute("SELECT pdf, added, missing FROM fill_tailored WHERE user_id = ? AND job_key = ? AND version = ?",
+        row = conn.execute("SELECT pdf, added, missing, covered FROM fill_tailored WHERE user_id = ? AND job_key = ? AND version = ?",
                            (user_id, job_key, version)).fetchone()
-    return {"pdf": bytes(row["pdf"]), "added": json.loads(row["added"]), "missing": json.loads(row["missing"])} if row else None
+    return {"pdf": bytes(row["pdf"]), "added": json.loads(row["added"]), "missing": json.loads(row["missing"]),
+            "covered": json.loads(row["covered"])} if row else None
 
 
-def save_tailored(user_id: int, job_key: str, version: str, pdf: bytes, added: list, missing: list) -> None:
+def save_tailored(user_id: int, job_key: str, version: str, pdf: bytes, added: list, missing: list, covered: list = ()) -> None:
     with db.connect() as conn:
-        conn.execute("""INSERT INTO fill_tailored (user_id, job_key, version, pdf, added, missing, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(user_id, job_key) DO UPDATE SET version = excluded.version, pdf = excluded.pdf,
-                        added = excluded.added, missing = excluded.missing, created_at = excluded.created_at""",
-                     (user_id, job_key, version, pdf, json.dumps(added), json.dumps(missing), db.now_iso()))
+        conn.execute("""INSERT INTO fill_tailored (user_id, job_key, version, pdf, added, missing, covered, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(user_id, job_key) DO UPDATE SET version = excluded.version, pdf = excluded.pdf, added = excluded.added,
+                        missing = excluded.missing, covered = excluded.covered, created_at = excluded.created_at""",
+                     (user_id, job_key, version, pdf, json.dumps(added), json.dumps(missing), json.dumps(list(covered)), db.now_iso()))

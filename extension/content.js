@@ -433,8 +433,8 @@
         let res = await ask({ type: "tailoredResume", payload: { job_id: auto?.jobId || null, url: location.href,
                                                                  page_text: pageText().replace(/\s+/g, " ").slice(0, 15000) } });
         if (res.ok) {
-          const { name, tailored, added, missing, note } = res.data;
-          record.resume = { name, tailored, added, missing, note: note || null };
+          const { name, tailored, added, missing, covered, note } = res.data;
+          record.resume = { name, tailored, added, missing, covered: covered || [], note: note || null };
         } else {
           res = await ask({ type: "resume" });
           if (!res.ok) return false;
@@ -788,7 +788,7 @@
     const next = nextButton();
     keepButtonsVisible(next);
     const filled = `${state.filled} filled` + (state.byAI ? `, ${state.byAI} written by AI (please read them)` : "")
-      + (record.resume?.tailored ? `, resume matched to this job (${record.resume.added.length} keywords)` : "");
+      + (record.resume?.covered?.length ? `, your resume covers ${record.resume.covered.length} of the job's ${record.resume.covered.length + record.resume.missing.length} keywords` : "");
     if (needs.length) {
       panel.status(`${filled}. ${needs.length} thing${needs.length === 1 ? "" : "s"} need${needs.length === 1 ? "s" : ""} you.`, "warn");
       panel.needs(needs, "I'll carry on by myself once you've done these.");

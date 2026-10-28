@@ -380,8 +380,11 @@ function ApplicationDetails({ a, onSkills }: { a: Application; onSkills: (skills
         <section>
           <h4>Resume sent</h4>
           {d.resume.tailored ? (
-            <p>Your resume, with its wording matched to this job{d.resume.added.length ? <>: <b>{d.resume.added.join(", ")}</b></> : null}. Nothing was added that your resume or profile doesn't show.</p>
+            <p>Your resume, with its wording matched to this job{d.resume.added.length ? <> (now uses <b>{d.resume.added.join(", ")}</b>)</> : null}. Nothing was added that your resume or profile doesn't show.</p>
           ) : <p>Your resume as it is ({d.resume.name}).{d.resume.note ? ` ${d.resume.note}` : ""}</p>}
+          {(d.resume.covered?.length ?? 0) > 0 && (
+            <p>It covers <b>{d.resume.covered!.length} of {d.resume.covered!.length + d.resume.missing.length}</b> keywords this job asks for: {d.resume.covered!.join(", ")}.</p>
+          )}
           {missing.length > 0 && (
             <div className="f-missing">
               <p className="f-muted small">The job also asks for these, which your resume doesn't show, so they weren't added. If you do have one, add it to your skills and future resumes will use it:</p>
