@@ -254,12 +254,31 @@ def status(user: dict = Depends(extension_user)) -> dict:
 def decide(body: DecideRequest, user: dict = Depends(extension_user)) -> dict:
     stored = accounts.get_profile(user["id"])
     profile = autofill.profile_from_dict(stored["data"])
+    profile.resume_text = _resume_text(user["id"])
     info = accounts.job_info(body.job_id) if body.job_id else None
     if body.job_id:
         accounts.record_application(user["id"], body.job_id, "opened")
     return autofill.decide([f.model_dump() for f in body.fields], body.job, body.page_text, profile,
                            resume_name=(stored["resume"] or {}).get("name") or "",
                            role=(info or {}).get("title", ""), company=(info or {}).get("company", ""))
+
+
+def _resume_text(user_id: int) -> str:
+    """The text of the user's resume (read once per resume and kept), so written answers say only what it says."""
+    stored = accounts.get_resume(user_id)
+    if stored is None:
+        return ""
+    resume_hash = tailor.fingerprint(hashlib.sha256(stored[1]).hexdigest())
+    read = accounts.resume_sections(user_id)
+    if read and read[0] == resume_hash:
+        return read[1]
+    try:
+        text = tailor.extract_text(stored[1])
+    except Exception:
+        return ""
+    if read is None or read[0] != resume_hash:   # sections are worked out when a resume is first tailored
+        accounts.save_resume_sections(user_id, resume_hash, text, {"_pending": True})
+    return text
 
 
 @router.get("/resume-file")
@@ -299,7 +318,7 @@ def tailored_resume(body: TailorRequest, user: dict = Depends(extension_user)) -
                 "added": cached["added"], "missing": cached["missing"]}
     try:
         read = accounts.resume_sections(user["id"])
-        if read is None or read[0] != resume_hash:
+        if read is None or read[0] != resume_hash or "_pending" in read[2]:
             text = tailor.extract_text(pdf)
             try:
                 sections = tailor.structure(text)

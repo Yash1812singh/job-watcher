@@ -129,6 +129,7 @@ class Profile:
     education: list[dict] = field(default_factory=list)
     history: list[dict] = field(default_factory=list)
     custom_answers: dict[str, str] = field(default_factory=dict)
+    resume_text: str = ""   # their resume's text: the facts, each under the job or project it belongs to
 
     @property
     def full_name(self) -> str:
@@ -148,10 +149,12 @@ class Profile:
                         for e in self.education)
         certs = "; ".join(c.get("name", "") for c in self.certifications if c.get("name"))
         return (f"Name: {self.full_name}\nLocation: {self.location}\nCurrent role: {self.current_title} at {self.current_company}\n"
-                f"Experience: {self.years} years\nSummary: {self.summary}\nSkills: {', '.join(self.skills[:30])}\n"
+                f"Experience: {self.years} years\nSummary: {self.summary}\n"
+                f"Skills (overall, from work and projects; not a statement of which job used which): {', '.join(self.skills[:30])}\n"
                 f"Work history: {jobs}\nEducation: {edu}\nCertifications: {certs}\nNotice period: {self.notice_period}\n"
                 f"Reason for change: {self.reason_for_change}\nPreferred locations: {self.preferred_locations}\n"
-                f"Work authorization: {self.work_authorization}; needs sponsorship: {self.require_sponsorship}; relocate: {self.can_relocate}")
+                f"Work authorization: {self.work_authorization}; needs sponsorship: {self.require_sponsorship}; relocate: {self.can_relocate}"
+                + (f"\n\nRESUME (each fact sits under the job or project it belongs to):\n{self.resume_text[:5000]}" if self.resume_text else ""))
 
 
 def _text(v) -> str:
@@ -299,7 +302,7 @@ RULES: list[tuple[re.Pattern, object]] = [(re.compile(p, re.I), a) for p, a in [
     (r"variable\s*(ctc|pay|component)|bonus", lambda p: p.current_variable),
     (r"(expected|desired)\s*(total\s*|annual\s*)?(ctc|salary|compensation|pay)|salary\s*expectation|"
      r"(minimum|required|target)\b.{0,30}(salary|compensation|ctc|pay)|(salary|compensation|ctc).{0,40}(require|expect|looking\s*for)",
-     lambda p: p.desired_salary),
+     lambda p: p.desired_salary or "Negotiable"),
     (r"(current|present)\s*(total\s*|annual\s*)?(ctc|salary|compensation)", lambda p: p.current_salary),
     (r"reason\s*for\s*(leaving|change|switch|job\s*change)|why\s*(are\s*you\s*)?(leaving|looking|switch|changing)",
      lambda p: p.reason_for_change or OPEN),
@@ -393,14 +396,14 @@ def _same_place(t: str) -> str:
 
 # ── AI ───────────────────────────────────────────────────────────────────────
 
-def _ai(prompt: str, max_tokens: int = 900) -> str:
+def _ai(prompt: str, max_tokens: int = 900, effort: str = "low") -> str:
     key = groq_key()
     if not key:
         return ""
     try:
         r = httpx.post("https://api.groq.com/openai/v1/chat/completions", timeout=45,
                        headers={"Authorization": f"Bearer {key}"},
-                       json={"model": GROQ_MODEL, "temperature": 0.3, "max_completion_tokens": max_tokens, "reasoning_effort": "low",
+                       json={"model": GROQ_MODEL, "temperature": 0.3, "max_completion_tokens": max_tokens, "reasoning_effort": effort,
                              "messages": [{"role": "user", "content": prompt}]})
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip().strip('"')
@@ -411,12 +414,35 @@ def _ai(prompt: str, max_tokens: int = 900) -> str:
 
 def ai_answer(profile: Profile, question: str, job: str, page_text: str, options: list[str] | None = None) -> str:
     choose = f"\nReply with exactly one of these options and nothing else: {' | '.join(options)}" if options else ""
-    return _ai(f"You are filling in a job application on behalf of the applicant below. The job: {job}\n"
-               f"Some text from the application page: {page_text[:1500]}\n\nApplicant:\n{profile.context()}\n\n"
-               f"Question on the form: {question}{choose}\n"
-               "Answer as the applicant, in first person, truthfully and only from the details above, in at most 80 words of plain text. "
-               "Don't invent employers, numbers or links. Spell the company and role names exactly as they appear above. "
-               "If the details don't cover it, give a short honest answer.")
+    draft = _ai(f"You are the applicant below, filling in a job application. Your goal is to get an interview for this job: {job}\n"
+               f"Some text from the application page (the job's requirements are here): {page_text[:2500]}\n\n"
+               f"Applicant:\n{profile.context()}\n\nQuestion on the form: {question}{choose}\n"
+               "How to answer, in first person and at most 80 words of plain text:\n"
+               "- Win the interview: lead with the applicant's most relevant real work and skills, and connect them to what this job asks for. "
+               "Be confident, specific and enthusiastic; no clichés or filler.\n"
+               "- Every fact must be true and come from the details above. Never claim a skill, tool, employer, number or link the applicant "
+               "doesn't have: a false claim is found out in the interview or the background check and ends the application. "
+               "Don't link a skill to an employer or project unless the details do (a skill in their list isn't proof they use it "
+               "at their current job), and don't describe work the details don't mention.\n"
+               "- Asked about something they haven't done: say so in a few words, then the closest real experience and that they learn "
+               "quickly (e.g. \"I haven't run Kubernetes in production yet; I deploy services with Docker and pick up new tools fast.\").\n"
+               "- Practical questions (relocating, travel, working on-site or in shifts, background checks, starting): answer in the way "
+               "that keeps the application going, unless the details say otherwise.\n"
+               "- Spell the company and role names exactly as they appear above.")
+    return draft if options or not draft else fact_check(profile, draft)
+
+
+def fact_check(profile: Profile, text: str) -> str:
+    """A second look at a written answer: anything the applicant's details don't directly support (a tool
+    tied to their employer when the details don't say so, work they don't mention) is taken out."""
+    checked = _ai("Below are a job applicant's details (with their resume) and an answer written for them. Check every factual "
+                  "statement against the details. Remove or reword any the details don't directly support: a tool or task tied to "
+                  "an employer or project when the resume puts it elsewhere or nowhere (e.g. Docker 'at <employer>' when the resume "
+                  "lists Docker only under a personal project), claims like 'shipped to production', results or numbers the "
+                  "details don't state. Keep plain admissions of what they haven't done, statements of interest and willingness to "
+                  "learn, the tone and roughly the length. Reply with the corrected answer only.\n\n"
+                  f"DETAILS:\n{profile.context()}\n\nANSWER:\n{text}", 3000, "medium")
+    return checked or text
 
 
 def cover_letter(profile: Profile, role: str, company: str, page_text: str = "") -> str:
@@ -424,11 +450,13 @@ def cover_letter(profile: Profile, role: str, company: str, page_text: str = "")
     role, company = role or "this role", company or "your company"
     if profile.cover_letter:
         return profile.cover_letter.replace("{company}", company).replace("{role}", role)
-    written = _ai(f"Write a short, specific cover letter (150-200 words, plain text, no placeholders, no address block) from the "
-                  f"applicant below for the {role} role at {company}. Use only facts from their details; don't invent any.\n"
+    written = _ai(f"Write a short, persuasive cover letter (150-200 words, plain text, no placeholders, no address block) from the "
+                  f"applicant below for the {role} role at {company}, written to win an interview: open with why they fit this job, "
+                  f"match their most relevant real work to the job's requirements, and close with enthusiasm. Use only facts from their "
+                  f"details; never invent skills, employers or numbers.\n"
                   f"Job page text: {page_text[:1500]}\n\nApplicant:\n{profile.context()}\n\nSign it with their name.", 1200)
     if written:
-        return written
+        return fact_check(profile, written)
     lead = profile.summary or (f"I'm a {profile.current_title} at {profile.current_company}." if profile.current_title else "")
     return (f"Dear Hiring Team at {company},\n\nI'm writing to apply for the {role} role. {lead}\n\n"
             f"My skills include {', '.join(profile.skills[:8]) or 'a strong engineering background'}. "
@@ -494,6 +522,7 @@ def decide(fields: list[dict], job: str = "", page_text: str = "", profile: Prof
             elif answer is None and (required or kind == "radio"):
                 ask_ai.append((f, options))
             elif isinstance(answer, str) and answer and not answer.startswith("__") and not PERSONAL.search(label) \
+                    and not re.search(r"salary|ctc|compensation|stipend", label, re.I) \
                     and not any(re.fullmatch(r"(mr|mrs|ms|miss|dr|mx)\.?", o.strip(), re.I) for o in options):
                 # the profile has an answer but not in these words ("45 days" vs "30-60 days"): closest option
                 ask_ai.append(({**f, "label": f"{label} (the applicant's own answer: {answer})"}, options))

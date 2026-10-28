@@ -167,5 +167,12 @@ def test_wordings_seen_on_real_forms():
     assert autofill.rule_answer("Total years of experience", p) == "1"
     assert autofill.rule_answer("Years of professional experience", p) == "1"
     salary = "What is your minimum required yearly salary (in INR) to consider a new position?"
-    assert autofill.rule_answer(salary, p) == ""                        # the profile has none: left for the user
+    assert autofill.rule_answer(salary, p) == "Negotiable"              # the profile has none (a number-only box goes to the user)
     assert autofill.rule_answer(salary, autofill.Profile(desired_salary="12 LPA")) == "12 LPA"
+
+
+def test_a_salary_range_is_never_guessed(monkeypatch):
+    monkeypatch.setattr(autofill, "ai_answer", lambda *a, **k: "10-15 LPA")
+    out = autofill.decide([{"id": "s", "kind": "select", "label": "Expected CTC", "options": ["5-10 LPA", "10-15 LPA", "15+ LPA"], "required": True}],
+                          profile=autofill.Profile(first_name="Yash"), resume_name="")
+    assert out["answers"] == [] and out["missing"] == ["Expected CTC"]
